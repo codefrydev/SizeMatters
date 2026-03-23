@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Size Comparison Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; }
+    
+    .dot-pattern {
+      background-image: radial-gradient(#334155 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    
+    /* Smooth bounce-in animation */
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      60% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop-in {
+      animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      transform-origin: bottom center;
+    }
+
+    /* Arrow Pulsing Animation */
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+      50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+    }
+    .animate-pulse-glow {
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Tooltip interactions */
+    .circle-container:hover .circle-tooltip {
+      transform: scale(1.1) translateX(-45%);
+      z-index: 60;
+    }
+    .circle-tooltip {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      transform: scale(1) translateX(-50%);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 overflow-hidden h-screen w-full flex flex-col md:flex-row">
+
+  <!-- LEFT PANEL: Controls & Data Entry -->
+  <div class="w-full md:w-80 lg:w-96 bg-slate-900 border-r border-slate-800 flex flex-col h-full z-20 shadow-2xl shrink-0">
+    
+    <!-- Header -->
+    <div class="p-5 border-b border-slate-800">
+      <h1 class="text-xl font-bold text-white flex items-center gap-2 mb-1">
+        <i data-lucide="maximize-2" class="w-5 h-5 text-blue-400"></i>
+        Size Explorer
+      </h1>
+      <p class="text-sm text-slate-400">Visually compare the scale of numbers.</p>
+    </div>
+
+    <!-- Scrollable controls area -->
+    <div class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+      
+      <!-- Global Settings -->
+      <div class="space-y-3 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+        <h3 class="text-sm font-medium text-slate-300">Dataset Settings</h3>
+        
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Load Preset</label>
+          <select id="presetSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+            <!-- Options populated by JS -->
+          </select>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Unit Label (e.g. km, Liters, $)</label>
+          <input type="text" id="unitInput" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="Custom unit...">
+        </div>
+      </div>
+
+      <!-- Add Custom Item -->
+      <form id="addItemForm" class="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+        <h3 class="text-sm font-medium text-slate-300 relative">Add Custom Item</h3>
+        
+        <div class="space-y-2 relative">
+          <input type="text" id="newName" placeholder="Item Name (e.g. My House)" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
+          
+          <div class="flex gap-2">
+            <input type="number" id="newValue" placeholder="Size" step="any" required class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
+            
+            <select id="newMultiplier" class="w-28 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
+              <option value="1">x1</option>
+              <option value="1000">Thousand</option>
+              <option value="1000000">Million</option>
+              <option value="1000000000">Billion</option>
+              <option value="1000000000000">Trillion</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full relative bg-blue-600 hover:bg-blue-500 text-white rounded-lg p-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+          <i data-lucide="plus" class="w-4 h-4"></i> Add to Canvas
+        </button>
+      </form>
+
+      <!-- Data List -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-end mb-3">
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Data</label>
+          <span class="text-xs text-slate-500">Sorted by size</span>
+        </div>
+        <div id="dataList" class="space-y-1.5">
+          <!-- List items populated by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Visualizer Canvas -->
+  <div class="flex-1 flex flex-col relative bg-slate-950/50 dot-pattern">
+    
+    <!-- Canvas Toolbar -->
+    <div class="absolute top-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
+      <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full px-4 py-2 flex items-center gap-6 shadow-xl pointer-events-auto">
+        
+        <!-- View Mode Toggle -->
+        <div class="flex bg-slate-950 rounded-full p-1 border border-slate-800">
+          <button id="btnOverlapping" class="p-1.5 rounded-full transition-all bg-slate-700 text-white" title="Overlapping View">
+            <div class="relative w-4 h-4">
+              <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-4 border border-current rounded-full"></div>
+              <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 border border-current rounded-full"></div>
+            </div>
+          </button>
+          <button id="btnSideBySide" class="p-1.5 rounded-full transition-all text-slate-400 hover:text-white" title="Side-by-Side View">
+            <i data-lucide="columns" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="w-px h-6 bg-slate-700"></div>
+
+        <!-- Zoom Controls -->
+        <div class="flex items-center gap-3">
+          <button id="btnZoomOut" class="p-1 text-slate-400 hover:text-white transition-colors">
+            <i data-lucide="zoom-out" class="w-4 h-4"></i>
+          </button>
+          
+          <div class="flex flex-col items-center min-w-[60px]">
+            <span id="zoomLabelText" class="text-xs font-bold text-blue-400">1x</span>
+            <span class="text-[10px] text-slate-500 uppercase">Scale</span>
+          </div>
+
+          <input type="range" id="zoomSlider" min="-2" max="5" step="0.1" value="0" class="w-24 accent-blue-500">
+          
+          <button id="btnZoomIn" class="p-1 text-slate-400 hover:text-white transition-colors">
+            <i data-lucide="zoom-in" class="w-4 h-4"></i>
+          </button>
+          
+          <button id="btnResetZoom" class="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors ml-1">
+            Reset
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tip Banner -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+      <div id="tipBanner" class="bg-slate-900/60 backdrop-blur text-slate-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 border border-slate-800">
+        <i data-lucide="info" class="w-3.5 h-3.5"></i>
+        <span>Circles are anchored at the bottom. Use zoom to see smaller items.</span>
+      </div>
+    </div>
+
+    <!-- Navigation Arrows (For Side-by-Side View) -->
+    <button id="navLeftBtn" class="hidden absolute left-6 top-1/2 -translate-y-1/2 z-40 bg-slate-900/80 hover:bg-slate-800 text-white p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur animate-pulse-glow transition-colors focus:outline-none">
+      <i data-lucide="chevron-left" class="w-8 h-8"></i>
+    </button>
+    <button id="navRightBtn" class="hidden absolute right-6 top-1/2 -translate-y-1/2 z-40 bg-slate-900/80 hover:bg-slate-800 text-white p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur animate-pulse-glow transition-colors focus:outline-none">
+      <i data-lucide="chevron-right" class="w-8 h-8"></i>
+    </button>
+
+    <!-- Canvas Area -->
+    <div class="flex-1 w-full h-full relative overflow-hidden pt-24 pb-12 px-12">
+      <div id="canvasScrollArea" class="w-full h-full relative flex items-end justify-center transition-all duration-300">
+        <!-- Circles populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Data & State ---
+    const PRESETS = {
+      planets: {
+        name: 'Planets & Moons (Diameter in km)',
+        unit: 'km',
+        data: [
+          { id: '1', name: 'Moon', value: 3474, color: '#d1d5db' },
+          { id: '2', name: 'Mercury', value: 4880, color: '#9ca3af' },
+          { id: '3', name: 'Mars', value: 6779, color: '#ef4444' },
+          { id: '4', name: 'Venus', value: 12104, color: '#f59e0b' },
+          { id: '5', name: 'Earth', value: 12742, color: '#3b82f6' },
+          { id: '6', name: 'Neptune', value: 49244, color: '#60a5fa' },
+          { id: '7', name: 'Uranus', value: 50724, color: '#818cf8' },
+          { id: '8', name: 'Saturn', value: 116460, color: '#fcd34d' },
+          { id: '9', name: 'Jupiter', value: 139820, color: '#fb923c' },
+          { id: '10', name: 'Sun', value: 1392700, color: '#eab308' },
+        ]
+      },
+      animals: {
+        name: 'Creatures (Length in meters)',
+        unit: 'm',
+        data: [
+          { id: '11', name: 'Ant', value: 0.01, color: '#1f2937' },
+          { id: '12', name: 'Mouse', value: 0.1, color: '#9ca3af' },
+          { id: '13', name: 'House Cat', value: 0.46, color: '#f97316' },
+          { id: '14', name: 'Human', value: 1.75, color: '#ec4899' },
+          { id: '15', name: 'Tiger', value: 3.1, color: '#f59e0b' },
+          { id: '16', name: 'Great White Shark', value: 4.5, color: '#94a3b8' },
+          { id: '17', name: 'African Elephant', value: 6, color: '#64748b' },
+          { id: '18', name: 'T-Rex', value: 12, color: '#4d7c0f' },
+          { id: '19', name: 'Blue Whale', value: 30, color: '#0284c7' },
+        ]
+      },
+      wealth: {
+        name: 'Wealth (in Billions USD)',
+        unit: 'B$',
+        data: [
+          { id: '20', name: 'Average Net Worth', value: 0.0001, color: '#22c55e' },
+          { id: '21', name: 'Millionaire', value: 0.001, color: '#16a34a' },
+          { id: '22', name: 'A Billionaire', value: 1, color: '#15803d' },
+          { id: '23', name: 'Mark Zuckerberg', value: 175, color: '#2563eb' },
+          { id: '24', name: 'Elon Musk', value: 250, color: '#8b5cf6' },
+          { id: '25', name: 'Apple Market Cap', value: 3000, color: '#a8a29e' },
+        ]
+      }
+    };
+
+    const PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'];
+
+    let state = {
+      activePreset: 'planets',
+      items: [...PRESETS.planets.data],
+      unit: PRESETS.planets.unit,
+      zoom: 1,
+      viewMode: 'overlapping', // 'overlapping' | 'side-by-side'
+    };
+
+    // --- DOM Elements ---
+    const presetSelect = document.getElementById('presetSelect');
+    const unitInput = document.getElementById('unitInput');
+    const addItemForm = document.getElementById('addItemForm');
+    const dataList = document.getElementById('dataList');
+    
+    const btnOverlapping = document.getElementById('btnOverlapping');
+    const btnSideBySide = document.getElementById('btnSideBySide');
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomLabelText = document.getElementById('zoomLabelText');
+    const canvasScrollArea = document.getElementById('canvasScrollArea');
+    const tipBanner = document.getElementById('tipBanner');
+    
+    const navLeftBtn = document.getElementById('navLeftBtn');
+    const navRightBtn = document.getElementById('navRightBtn');
+
+    // --- Format Helpers ---
+    function formatNumber(num) {
+      if (num < 0.01) return num.toExponential(2);
+      return new Intl.NumberFormat('en-US', { 
+        notation: num >= 10000 ? "compact" : "standard",
+        maximumFractionDigits: 2 
+      }).format(num);
+    }
+
+    function getSortedItems() {
+      return [...state.items].sort((a, b) => b.value - a.value);
+    }
+
+    function getMaxValue() {
+      if (state.items.length === 0) return 1;
+      return Math.max(...state.items.map(item => item.value));
+    }
+
+    // --- Rendering logic ---
+
+    function initPresets() {
+      presetSelect.innerHTML = '';
+      for (const [key, data] of Object.entries(PRESETS)) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = data.name;
+        presetSelect.appendChild(option);
+      }
+      presetSelect.value = state.activePreset;
+      unitInput.value = state.unit;
+    }
+
+    function renderSidebarList() {
+      dataList.innerHTML = '';
+      if (state.items.length === 0) {
+        dataList.innerHTML = `<div class="text-center p-4 text-sm text-slate-500 border border-dashed border-slate-800 rounded-lg">No items. Add some above!</div>`;
+        return;
+      }
+
+      const sorted = getSortedItems();
+      sorted.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between p-2 rounded-lg border bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-all';
+        div.innerHTML = `
+          <div class="flex items-center gap-3 truncate">
+            <div class="w-3 h-3 rounded-full shrink-0 shadow-sm" style="background-color: ${item.color}"></div>
+            <span class="text-sm font-medium truncate">${item.name}</span>
+          </div>
+          <div class="flex items-center gap-3 shrink-0 ml-2">
+            <span class="text-xs text-slate-400 font-mono">${formatNumber(item.value)} ${state.unit}</span>
+            <button onclick="removeItem('${item.id}')" class="text-slate-500 hover:text-red-400 hover:bg-slate-800 p-1 rounded-md transition-colors">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        `;
+        
+        // Add hover effects linked to canvas
+        div.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
+        div.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
+        
+        dataList.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    function renderCanvas(triggerAnimation = false) {
+      canvasScrollArea.innerHTML = '';
+      
+      // Update layout mode
+      if (state.viewMode === 'side-by-side') {
+        canvasScrollArea.className = 'w-full h-full relative flex items-end justify-start gap-8 overflow-x-auto overflow-y-hidden pb-8 px-12 custom-scrollbar';
+        tipBanner.querySelector('span').textContent = 'Scroll right or use arrows to see larger items. Use zoom to adjust.';
+        navLeftBtn.classList.remove('hidden');
+        navRightBtn.classList.remove('hidden');
+      } else {
+        canvasScrollArea.className = 'w-full h-full relative flex items-end justify-center';
+        tipBanner.querySelector('span').textContent = 'Circles are anchored at the bottom. Use zoom to see smaller items.';
+        navLeftBtn.classList.add('hidden');
+        navRightBtn.classList.add('hidden');
+      }
+
+      if (state.items.length === 0) {
+        canvasScrollArea.innerHTML = `
+          <div class="w-full h-full flex items-center justify-center text-slate-500 absolute inset-0">
+            <div class="text-center">
+              <i data-lucide="maximize-2" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
+              <p>No items to compare.</p>
+              <p class="text-sm">Add custom items or load a preset from the sidebar.</p>
+            </div>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      const maxValue = getMaxValue();
+      let displayItems = getSortedItems();
+      
+      // In side-by-side, we want smallest first (left to right)
+      if (state.viewMode === 'side-by-side') {
+        displayItems = displayItems.reverse();
+      }
+
+      displayItems.forEach((item) => {
+        const baseHeightPct = (item.value / maxValue) * 80; 
+        const zoomedHeightPct = baseHeightPct * state.zoom;
+        const isTooSmall = zoomedHeightPct < 0.5;
+
+        // In overlapping mode, skip rendering microscopic items unless we zoom in
+        if (isTooSmall && state.viewMode === 'overlapping') return;
+
+        const container = document.createElement('div');
+        container.className = `circle-container relative rounded-full transition-all duration-700 ease-out cursor-pointer group ${state.viewMode === 'overlapping' ? 'absolute bottom-0 left-1/2 -translate-x-1/2' : 'shrink-0'}`;
+        container.style.height = `${Math.max(0.1, zoomedHeightPct)}%`;
+        container.style.aspectRatio = '1 / 1';
+        container.style.zIndex = '10';
+        container.dataset.id = item.id;
+        container.dataset.basePct = baseHeightPct; // Store for easy zoom updates
+
+        // The colored circle
+        const circle = document.createElement('div');
+        circle.className = `w-full h-full rounded-full transition-all duration-300 circle-shape ${triggerAnimation ? 'animate-pop-in' : ''}`;
+        circle.style.backgroundColor = `${item.color}33`;
+        circle.style.border = `2px solid ${item.color}`;
+        
+        // Tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = `circle-tooltip absolute whitespace-nowrap px-3 py-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border shadow-2xl flex flex-col items-center pointer-events-none ${state.viewMode === 'overlapping' ? 'top-0 left-1/2 -translate-y-1/2' : 'bottom-[100%] left-1/2 mb-4'}`;
+        tooltip.style.borderColor = item.color;
+        
+        // Hide tooltip if extremely small in overlapping mode until hovered (handled by css hover)
+        if(isTooSmall) tooltip.style.opacity = '0';
+
+        tooltip.innerHTML = `
+          <span class="font-bold text-white text-sm drop-shadow-md">${item.name}</span>
+          <span class="text-xs text-slate-300 font-mono">${formatNumber(item.value)} ${state.unit}</span>
+        `;
+
+        // Center line for huge overlapping items
+        const centerLine = document.createElement('div');
+        centerLine.className = "hidden absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-full border-l border-dashed border-white/30 pointer-events-none center-line";
+
+        container.appendChild(circle);
+        container.appendChild(tooltip);
+        container.appendChild(centerLine);
+        
+        // Hover Events for standard interactions
+        container.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
+        container.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
+
+        canvasScrollArea.appendChild(container);
+      });
+    }
+
+    // Fast update purely for zoom to avoid re-rendering entire DOM and triggering animations
+    function updateCanvasZoomStyles() {
+      const containers = canvasScrollArea.querySelectorAll('.circle-container');
+      containers.forEach(container => {
+        const basePct = parseFloat(container.dataset.basePct);
+        const zoomedHeightPct = basePct * state.zoom;
+        container.style.height = `${Math.max(0.1, zoomedHeightPct)}%`;
+        
+        // Manage tooltip visibility for small items dynamically
+        const tooltip = container.querySelector('.circle-tooltip');
+        if (tooltip && state.viewMode === 'overlapping') {
+           tooltip.style.opacity = (zoomedHeightPct < 0.5 && !container.classList.contains('is-hovered')) ? '0' : '1';
+        }
+      });
+    }
+
+    function highlightCanvasItem(id, isHovered) {
+      const container = canvasScrollArea.querySelector(`.circle-container[data-id="${id}"]`);
+      if (!container) return;
+
+      const circle = container.querySelector('.circle-shape');
+      const tooltip = container.querySelector('.circle-tooltip');
+      const centerLine = container.querySelector('.center-line');
+
+      if (isHovered) {
+        container.style.zIndex = '50';
+        container.classList.add('is-hovered');
+        circle.style.boxShadow = `0 0 30px ${circle.style.borderColor}66, inset 0 0 20px ${circle.style.borderColor}44`;
+        tooltip.style.transform = `scale(1.1) translateX(-45%)`;
+        tooltip.style.opacity = '1';
+        if (state.viewMode === 'overlapping' && parseFloat(container.style.height) > 100) {
+          centerLine.classList.remove('hidden');
+        }
+      } else {
+        container.style.zIndex = '10';
+        container.classList.remove('is-hovered');
+        circle.style.boxShadow = 'none';
+        tooltip.style.transform = `scale(1) translateX(-50%)`;
+        if (state.viewMode === 'overlapping' && parseFloat(container.style.height) < 0.5) {
+          tooltip.style.opacity = '0';
+        }
+        centerLine.classList.add('hidden');
+      }
+    }
+
+    // --- Actions ---
+
+    window.removeItem = function(id) {
+      state.items = state.items.filter(item => item.id !== id);
+      renderSidebarList();
+      renderCanvas(true);
+    };
+
+    function setZoom(newZoom) {
+      state.zoom = Math.max(0.01, newZoom);
+      zoomSlider.value = Math.log10(state.zoom);
+      zoomLabelText.textContent = state.zoom < 1 ? state.zoom.toFixed(3) + 'x' : Math.round(state.zoom) + 'x';
+      updateCanvasZoomStyles();
+    }
+
+    function smoothScrollCanvas(direction) {
+      if (state.viewMode !== 'side-by-side') return;
+      // Scroll by roughly 60% of the visible width
+      const scrollAmount = canvasScrollArea.clientWidth * 0.6;
+      canvasScrollArea.scrollBy({
+        left: direction === 'right' ? scrollAmount : -scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+
+    // --- Event Listeners ---
+
+    presetSelect.addEventListener('change', (e) => {
+      const presetKey = e.target.value;
+      state.activePreset = presetKey;
+      state.items = [...PRESETS[presetKey].data];
+      state.unit = PRESETS[presetKey].unit;
+      state.zoom = 1;
+      
+      unitInput.value = state.unit;
+      zoomSlider.value = 0;
+      zoomLabelText.textContent = '1x';
+      
+      renderSidebarList();
+      renderCanvas(true); // Trigger animation on preset change
+    });
+
+    unitInput.addEventListener('input', (e) => {
+      state.unit = e.target.value;
+      renderSidebarList();
+      updateCanvasZoomStyles(); // Re-render tooltips text without rebuilding DOM
+      renderCanvas(false);
+    });
+
+    addItemForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('newName').value;
+      const value = parseFloat(document.getElementById('newValue').value);
+      const multiplier = parseFloat(document.getElementById('newMultiplier').value);
+
+      if (!name || isNaN(value)) return;
+
+      const newItem = {
+        id: Date.now().toString(),
+        name: name,
+        value: value * multiplier,
+        color: PALETTE[state.items.length % PALETTE.length]
+      };
+
+      state.items.push(newItem);
+      
+      // Reset inputs
+      document.getElementById('newName').value = '';
+      document.getElementById('newValue').value = '';
+
+      renderSidebarList();
+      renderCanvas(true); // Trigger animation for new item
+      
+      // If side-by-side, scroll to the far right (where new large items usually go)
+      if (state.viewMode === 'side-by-side') {
+        setTimeout(() => canvasScrollArea.scrollTo({ left: canvasScrollArea.scrollWidth, behavior: 'smooth' }), 100);
+      }
+    });
+
+    // View toggles
+    btnOverlapping.addEventListener('click', () => {
+      state.viewMode = 'overlapping';
+      btnOverlapping.className = 'p-1.5 rounded-full transition-all bg-slate-700 text-white';
+      btnSideBySide.className = 'p-1.5 rounded-full transition-all text-slate-400 hover:text-white';
+      renderCanvas(true);
+    });
+
+    btnSideBySide.addEventListener('click', () => {
+      state.viewMode = 'side-by-side';
+      btnSideBySide.className = 'p-1.5 rounded-full transition-all bg-slate-700 text-white';
+      btnOverlapping.className = 'p-1.5 rounded-full transition-all text-slate-400 hover:text-white';
+      renderCanvas(true);
+    });
+
+    // Zoom controls
+    zoomSlider.addEventListener('input', (e) => {
+      setZoom(Math.pow(10, parseFloat(e.target.value)));
+    });
+
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+      setZoom(state.zoom / 1.5);
+    });
+
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+      setZoom(state.zoom * 1.5);
+    });
+
+    document.getElementById('btnResetZoom').addEventListener('click', () => {
+      setZoom(1);
+    });
+
+    // Arrow Navigation Triggers
+    navLeftBtn.addEventListener('click', () => smoothScrollCanvas('left'));
+    navRightBtn.addEventListener('click', () => smoothScrollCanvas('right'));
+
+    // Keyboard Arrow Navigation
+    document.addEventListener('keydown', (e) => {
+      if (state.viewMode === 'side-by-side') {
+        // Ignore if typing in an input field
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          smoothScrollCanvas('right');
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          smoothScrollCanvas('left');
+        }
+      }
+    });
+
+    // --- Init ---
+    lucide.createIcons();
+    initPresets();
+    renderSidebarList();
+    renderCanvas(true);
+
+  </script>
+</body>
+</html>
