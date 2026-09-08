@@ -2,317 +2,482 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Size Comparison Visualizer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      touch-action: manipulation;
+    }
     
     .dot-pattern {
-      background-image: radial-gradient(#334155 1px, transparent 1px);
+      background-image: radial-gradient(#334155 1.2px, transparent 1.2px);
       background-size: 24px 24px;
     }
     
-    /* Smooth bounce-in animation */
-    @keyframes popIn {
-      0% { transform: scale(0); opacity: 0; }
-      60% { transform: scale(1.05); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
+    /* Cross-browser modern custom scrollbar */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #334155 rgba(15, 23, 42, 0.6);
     }
-    .animate-pop-in {
-      animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-      transform-origin: bottom center;
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
     }
-
-    /* Arrow Pulsing Animation */
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
-      50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
     }
-    .animate-pulse-glow {
-      animation: pulseGlow 2s infinite ease-in-out;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.5);
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
+    ::-webkit-scrollbar-thumb {
       background: #334155;
       border-radius: 4px;
     }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    ::-webkit-scrollbar-thumb:hover {
       background: #475569;
     }
 
-    /* Tooltip interactions */
-    .circle-container:hover .circle-tooltip {
-      transform: scale(1.1) translateX(-45%);
-      z-index: 60;
+    /* Grab cursor for canvas dragging */
+    .cursor-grab {
+      cursor: grab;
     }
-    .circle-tooltip {
-      transition: transform 0.3s ease, opacity 0.3s ease;
-      transform: scale(1) translateX(-50%);
+    .cursor-grabbing {
+      cursor: grabbing !important;
+      user-select: none;
     }
 
-    :where(button, input[type="range"], select):focus-visible {
+    /* Pop-in animation */
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      70% { transform: scale(1.04); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop-in {
+      animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      transform-origin: bottom center;
+    }
+
+    /* Micro-pulse for microscopic items in overlapping view */
+    @keyframes microPulse {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.8), 0 0 10px rgba(96, 165, 250, 0.5); }
+      50% { box-shadow: 0 0 0 4px rgba(96, 165, 250, 1), 0 0 16px rgba(96, 165, 250, 0.8); }
+    }
+    .animate-micro-pulse {
+      animation: microPulse 2s infinite ease-in-out;
+    }
+
+    #canvasViewport {
+      touch-action: none;
+    }
+
+    /* Tooltip stable transform */
+    .circle-tooltip {
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+    .overlapping-tooltip {
+      transform: translate(-50%, -100%);
+      margin-top: -8px;
+    }
+    .circle-container:hover .overlapping-tooltip {
+      opacity: 1 !important;
+      transform: translate(-50%, calc(-100% - 6px));
+    }
+    .side-by-side-tooltip {
+      transform: translate(-50%, 0);
+      margin-bottom: 8px;
+    }
+    .circle-container:hover .side-by-side-tooltip {
+      opacity: 1 !important;
+      transform: translate(-50%, -6px);
+    }
+
+    /* Focus highlight on side-by-side active element */
+    .circle-container.side-by-side-target:not(.is-hovered) .circle-shape {
+      box-shadow: 0 0 0 3px rgb(96 165 250 / 0.9), 0 0 24px rgb(96 165 250 / 0.4);
+    }
+
+    :where(button, input, select):focus-visible {
       outline: 2px solid rgb(96 165 250);
       outline-offset: 2px;
     }
 
-    /* Side-by-side: keyboard / arrow “target” (not hovered) */
-    .circle-container.side-by-side-target:not(.is-hovered) .circle-shape {
-      box-shadow: 0 0 0 3px rgb(96 165 250 / 0.85), 0 0 24px rgb(96 165 250 / 0.35);
+    /* Shake animation on form error */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+    .shake-error {
+      animation: shake 0.4s ease-in-out;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-200 overflow-hidden h-screen min-h-0 w-full flex flex-col md:flex-row">
+<body class="bg-slate-950 text-slate-200 overflow-hidden h-[100dvh] w-full flex flex-col md:flex-row select-none">
 
   <!-- LEFT PANEL: Controls & Data Entry -->
-  <div class="w-full md:w-80 lg:w-96 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-2xl max-h-[min(50vh,420px)] min-h-0 md:max-h-none md:h-full">
+  <div class="w-full md:w-80 lg:w-96 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-2xl max-h-[46dvh] md:max-h-none md:h-full">
     
     <!-- Header -->
-    <div class="p-5 border-b border-slate-800">
-      <h1 class="text-xl font-bold text-white flex items-center gap-2 mb-1">
-        <i data-lucide="maximize-2" class="w-5 h-5 text-blue-400"></i>
-        Size Explorer
-      </h1>
-      <p class="text-sm text-slate-400">Visually compare the scale of numbers.</p>
+    <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+          <i data-lucide="maximize-2" class="w-5 h-5 text-blue-400"></i>
+          Size Explorer
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">Visually compare the true scale of numbers.</p>
+      </div>
+      <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/80 text-blue-400 border border-blue-800/60 font-mono">v2.0</span>
     </div>
 
     <!-- Scrollable controls area -->
-    <div class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+    <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
       
       <!-- Global Settings -->
-      <div class="space-y-3 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
-        <h3 class="text-sm font-medium text-slate-300">Dataset Settings</h3>
+      <div class="space-y-3 bg-slate-800/40 p-3.5 sm:p-4 rounded-xl border border-slate-700/50 shadow-inner">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-blue-400"></i>
+            Dataset Settings
+          </h3>
+          <span id="itemCountBadge" class="text-[10px] bg-slate-700/80 px-1.5 py-0.5 rounded text-slate-300 font-mono">10 items</span>
+        </div>
         
         <div class="space-y-1">
-          <label class="text-xs text-slate-400">Load Preset</label>
-          <select id="presetSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+          <label for="presetSelect" class="text-xs text-slate-400">Load Preset</label>
+          <select id="presetSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer">
             <!-- Options populated by JS -->
           </select>
         </div>
 
-        <div class="space-y-1">
-          <label class="text-xs text-slate-400">Unit Label (e.g. km, Liters, $)</label>
-          <input type="text" id="unitInput" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="Custom unit...">
-        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="space-y-1">
+            <label for="unitInput" class="text-xs text-slate-400">Unit Label</label>
+            <input type="text" id="unitInput" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs sm:text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="km, m, $...">
+          </div>
 
-        <div class="space-y-1">
-          <label class="text-xs text-slate-400" for="stripOrderSelect">Order along strip &amp; list</label>
-          <select id="stripOrderSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" title="Left-to-right order in side-by-side view; same order in the list below">
-            <option value="asc">Increasing — smallest → largest (left → right)</option>
-            <option value="desc">Decreasing — largest → smallest (left → right)</option>
-          </select>
-          <p class="text-[10px] text-slate-500 leading-snug">← → moves one step along this order so it matches how items are laid out.</p>
+          <div class="space-y-1">
+            <label for="stripOrderSelect" class="text-xs text-slate-400">Sort Order</label>
+            <select id="stripOrderSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs sm:text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none transition-all cursor-pointer">
+              <option value="asc">Ascending (Small → Big)</option>
+              <option value="desc">Descending (Big → Small)</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <!-- Add Custom Item -->
-      <form id="addItemForm" class="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 relative overflow-hidden group">
-        <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-        <h3 class="text-sm font-medium text-slate-300 relative">Add Custom Item</h3>
+      <form id="addItemForm" class="space-y-3 bg-slate-800/50 p-3.5 sm:p-4 rounded-xl border border-slate-700/50 relative overflow-hidden group">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-emerald-400"></i>
+            Add Custom Item
+          </h3>
+          <span id="addSuccessToast" class="text-[10px] text-emerald-400 opacity-0 transition-opacity font-medium">Added!</span>
+        </div>
         
-        <div class="space-y-2 relative">
-          <input type="text" id="newName" placeholder="Item Name (e.g. My House)" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
+        <div class="space-y-2">
+          <input type="text" id="newName" placeholder="Item Name (e.g. Eiffel Tower)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors">
           
           <div class="flex gap-2">
-            <input type="number" id="newValue" placeholder="Size" step="any" min="0.0000001" required class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
+            <input type="number" id="newValue" placeholder="Size" step="any" min="0" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors">
             
-            <select id="newMultiplier" class="w-28 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none">
-              <option value="1">x1</option>
-              <option value="1000">Thousand</option>
-              <option value="1000000">Million</option>
-              <option value="1000000000">Billion</option>
-              <option value="1000000000000">Trillion</option>
+            <select id="newMultiplier" class="w-32 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer">
+              <option value="0.000000001">Nano (10⁻⁹)</option>
+              <option value="0.000001">Micro (10⁻⁶)</option>
+              <option value="0.001">Milli (10⁻³)</option>
+              <option value="1" selected>x1 (Base)</option>
+              <option value="1000">Thousand (k)</option>
+              <option value="1000000">Million (M)</option>
+              <option value="1000000000">Billion (B)</option>
+              <option value="1000000000000">Trillion (T)</option>
             </select>
           </div>
-        </div>
 
-        <button type="submit" class="w-full relative bg-blue-600 hover:bg-blue-500 text-white rounded-lg p-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-          <i data-lucide="plus" class="w-4 h-4"></i> Add to Canvas
-        </button>
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <div class="flex items-center gap-2">
+              <label for="newColor" class="text-xs text-slate-400">Color:</label>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="newColor" value="#3b82f6" class="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer">
+                <button type="button" id="btnRandomColor" title="Randomize color" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                  <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" class="flex-1 max-w-[140px] bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2 px-3 text-xs font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-md shadow-blue-900/30">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Item
+            </button>
+          </div>
+        </div>
       </form>
 
       <!-- Data List -->
       <div class="space-y-2">
-        <div class="flex justify-between items-end gap-2 mb-3 flex-wrap">
-          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Data</label>
+        <div class="flex justify-between items-center gap-2 mb-2 flex-wrap">
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="list" class="w-3.5 h-3.5 text-blue-400"></i>
+            Current Items
+          </label>
           <div class="flex items-center gap-2">
-            <span id="listOrderHint" class="text-xs text-slate-500">Smallest → largest</span>
-            <button type="button" id="btnClearAll" class="text-xs text-slate-500 hover:text-red-400 underline decoration-slate-600 hover:decoration-red-400/60 underline-offset-2">Clear all</button>
+            <button type="button" id="btnClearAll" class="text-xs text-slate-400 hover:text-red-400 transition-colors underline decoration-slate-600 underline-offset-2">
+              Clear all
+            </button>
           </div>
         </div>
-        <div id="dataList" class="space-y-1.5">
+
+        <div id="dataList" class="space-y-1.5 pr-0.5">
           <!-- List items populated by JS -->
         </div>
       </div>
 
-      <p class="text-[11px] text-slate-600 leading-relaxed pt-2 border-t border-slate-800/80">
-        Canvas shortcuts (when not typing): <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">+</kbd> /
-        <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">-</kbd> zoom,
-        <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">0</kbd> reset,
-        <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">F</kbd> fit all.
-        Side-by-side: arrow keys focus previous / next item and auto-zoom to it.
-        <strong class="text-slate-500 font-normal">Scroll wheel</strong> on the canvas zooms in and out.
-        In side-by-side view, <strong class="text-slate-500 font-normal">Shift+scroll</strong> or a horizontal trackpad swipe pans along the row.
-        Two-finger pinch on touch devices still zooms.
-      </p>
+      <!-- Shortcuts / Tips -->
+      <div class="text-[11px] text-slate-500 leading-relaxed pt-3 border-t border-slate-800/80 space-y-1">
+        <p><strong class="text-slate-400">Drag to Pan:</strong> Click &amp; drag canvas to pan view.</p>
+        <p><strong class="text-slate-400">Zoom:</strong> Mouse wheel or <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">+</kbd> / <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">-</kbd>. Press <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">0</kbd> to reset, <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">F</kbd> to fit all.</p>
+        <p><strong class="text-slate-400">Navigate:</strong> Arrow keys <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">←</kbd> <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">→</kbd> step along items in side-by-side mode.</p>
+      </div>
     </div>
   </div>
 
   <!-- RIGHT PANEL: Visualizer Canvas -->
-  <div id="visualizerPanel" class="flex-1 flex flex-col relative min-h-0 bg-slate-950/50 dot-pattern">
+  <div id="visualizerPanel" class="flex-1 flex flex-col relative min-h-0 bg-slate-950 dot-pattern overflow-hidden">
     
-    <!-- Canvas Toolbar: flex row so it stays pinned to top of panel (no reflow / recentre jump) -->
-    <div class="shrink-0 z-30 flex justify-center px-4 pt-4 pb-2 pointer-events-none">
-      <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full px-4 py-2 flex items-center gap-6 shadow-xl pointer-events-auto max-w-[calc(100vw-2rem)]">
+    <!-- Canvas Toolbar -->
+    <div class="shrink-0 z-30 flex justify-center px-3 pt-3 pb-2 pointer-events-none">
+      <div class="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl md:rounded-full px-3 py-1.5 md:py-2 flex flex-wrap items-center justify-center gap-2 sm:gap-4 md:gap-5 shadow-2xl pointer-events-auto max-w-[calc(100vw-1.5rem)]">
         
         <!-- View Mode Toggle -->
-        <div class="flex bg-slate-950 rounded-full p-1 border border-slate-800" role="group" aria-label="View layout">
-          <button type="button" id="btnOverlapping" class="p-1.5 rounded-full transition-all text-slate-400 hover:text-white" title="Overlapping View" aria-label="Overlapping view" aria-pressed="false">
-            <div class="relative w-4 h-4" aria-hidden="true">
-              <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-4 border border-current rounded-full"></div>
-              <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 border border-current rounded-full"></div>
-            </div>
+        <div class="flex bg-slate-950 rounded-lg md:rounded-full p-0.5 border border-slate-800" role="group" aria-label="View layout">
+          <button type="button" id="btnOverlapping" class="px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 text-slate-400 hover:text-white" title="Concentric Overlapping View" aria-pressed="false">
+            <i data-lucide="circle-dot" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Concentric</span>
           </button>
-          <button type="button" id="btnSideBySide" class="p-1.5 rounded-full transition-all bg-slate-700 text-white" title="Side-by-Side View" aria-label="Side by side view" aria-pressed="true">
-            <i data-lucide="columns" class="w-4 h-4" aria-hidden="true"></i>
+          <button type="button" id="btnSideBySide" class="px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 bg-blue-600 text-white shadow-sm" title="Side-by-Side Strip View" aria-pressed="true">
+            <i data-lucide="columns" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Side-by-Side</span>
           </button>
         </div>
 
-        <div class="w-px h-6 bg-slate-700"></div>
+        <div class="hidden sm:block w-px h-5 bg-slate-700"></div>
 
         <!-- Zoom Controls -->
-        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2" role="group" aria-label="Zoom controls">
-          <button type="button" id="btnZoomOut" class="p-1 text-slate-400 hover:text-white transition-colors" aria-label="Zoom out">
-            <i data-lucide="zoom-out" class="w-4 h-4" aria-hidden="true"></i>
+        <div class="flex items-center gap-1 sm:gap-2" role="group" aria-label="Zoom controls">
+          <button type="button" id="btnZoomOut" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="Zoom out (-)" aria-label="Zoom out">
+            <i data-lucide="minus" class="w-3.5 h-3.5"></i>
           </button>
           
-          <div class="flex flex-col items-center min-w-[4.75rem] shrink-0">
-            <span id="zoomLabelText" class="text-xs font-bold text-blue-400 tabular-nums text-center whitespace-nowrap" aria-live="polite">1x</span>
-            <label for="zoomSlider" class="text-[10px] text-slate-500 uppercase cursor-pointer">Scale</label>
+          <div class="flex flex-col items-center min-w-[3.5rem] px-1">
+            <span id="zoomLabelText" class="text-xs font-bold text-blue-400 tabular-nums text-center whitespace-nowrap">1.0x</span>
+            <span class="text-[9px] text-slate-500 uppercase font-medium">Zoom</span>
           </div>
 
-          <input type="range" id="zoomSlider" min="-2" max="5" step="0.1" value="0" class="w-24 accent-blue-500" aria-valuemin="-2" aria-valuemax="5" aria-valuenow="0" aria-label="Canvas zoom scale">
+          <input type="range" id="zoomSlider" min="-2" max="5" step="0.05" value="0" class="w-16 sm:w-24 accent-blue-500 cursor-pointer" aria-label="Canvas zoom scale">
           
-          <button type="button" id="btnZoomIn" class="p-1 text-slate-400 hover:text-white transition-colors" aria-label="Zoom in">
-            <i data-lucide="zoom-in" class="w-4 h-4" aria-hidden="true"></i>
+          <button type="button" id="btnZoomIn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="Zoom in (+)" aria-label="Zoom in">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          </button>
+
+          <button type="button" id="btnFitZoom" class="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors flex items-center gap-1" title="Fit all items in screen (F)" aria-label="Fit all items">
+            <i data-lucide="expand" class="w-3 h-3"></i>
+            <span>Fit</span>
           </button>
           
-          <button type="button" id="btnFitZoom" class="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors" title="Zoom so every item is visible (overlapping mode)" aria-label="Fit all items in view">
-            Fit
-          </button>
-          <button type="button" id="btnResetZoom" class="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors" aria-label="Reset zoom to 1x">
-            Reset
+          <button type="button" id="btnResetZoom" class="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors" title="Reset zoom to 1x (0)" aria-label="Reset zoom">
+            100%
           </button>
         </div>
 
       </div>
     </div>
 
-    <!-- Canvas Area: scroll layer isolated so circle z-index cannot cover nav; nav after canvas for hit-testing -->
-    <div id="canvasViewport" class="flex-1 w-full min-h-0 relative overflow-hidden pb-12 px-4 sm:px-12">
-      <div id="canvasScrollArea" class="w-full h-full min-h-0 relative z-0 isolate flex items-end justify-center transition-[height] duration-300">
-        <!-- Circles populated by JS -->
+    <!-- Active Inspect / Offscreen HUD Banner -->
+    <div id="offscreenHud" class="hidden absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md border border-blue-500/50 rounded-full px-4 py-1.5 text-xs text-slate-200 shadow-2xl flex items-center gap-2.5 pointer-events-auto transition-all">
+      <div id="offscreenHudDot" class="w-2.5 h-2.5 rounded-full"></div>
+      <span id="offscreenHudText" class="font-medium">Inspecting: Sun (1.39M km)</span>
+      <span class="text-[10px] text-blue-400 bg-blue-950/80 px-2 py-0.5 rounded-full border border-blue-800/60">Outer arc off-screen</span>
+      <button type="button" id="btnResetHudPan" class="text-[10px] text-slate-400 hover:text-white underline ml-1">Center</button>
+    </div>
+
+    <!-- Canvas Area -->
+    <div id="canvasViewport" class="flex-1 w-full min-h-0 relative overflow-hidden cursor-grab select-none">
+      
+      <!-- Overlapping View Container (2D panned) -->
+      <div id="overlappingContainer" class="hidden absolute inset-0 w-full h-full pointer-events-none transition-transform duration-75">
+        <div id="overlappingCanvas" class="w-full h-full relative pointer-events-auto flex items-end justify-center">
+          <!-- Overlapping circles populated by JS -->
+        </div>
       </div>
-      <button type="button" id="navLeftBtn" class="hidden absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-50 pointer-events-auto bg-slate-900/80 hover:bg-slate-800 text-white p-2 sm:p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur animate-pulse-glow transition-colors" aria-label="Previous item">
-        <i data-lucide="chevron-left" class="w-6 h-6 sm:w-8 sm:h-8" aria-hidden="true"></i>
+
+      <!-- Side-by-Side View Scroll Container (horizontal pan) -->
+      <div id="sideBySideContainer" class="w-full h-full min-h-0 relative flex items-end justify-start gap-8 overflow-x-auto overflow-y-hidden pb-12 px-16 custom-scrollbar">
+        <!-- Side by side circles populated by JS -->
+      </div>
+
+      <!-- Left / Right Navigation Controls for Side-by-Side -->
+      <button type="button" id="navLeftBtn" class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-40 bg-slate-900/90 hover:bg-slate-800 text-white p-2.5 sm:p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur transition-all disabled:opacity-20 disabled:pointer-events-none disabled:shadow-none" aria-label="Previous item">
+        <i data-lucide="chevron-left" class="w-5 h-5 sm:w-6 sm:h-6"></i>
       </button>
-      <button type="button" id="navRightBtn" class="hidden absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-50 pointer-events-auto bg-slate-900/80 hover:bg-slate-800 text-white p-2 sm:p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur animate-pulse-glow transition-colors" aria-label="Next item">
-        <i data-lucide="chevron-right" class="w-6 h-6 sm:w-8 sm:h-8" aria-hidden="true"></i>
+      <button type="button" id="navRightBtn" class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-40 bg-slate-900/90 hover:bg-slate-800 text-white p-2.5 sm:p-3 rounded-full border border-slate-700 shadow-2xl backdrop-blur transition-all disabled:opacity-20 disabled:pointer-events-none disabled:shadow-none" aria-label="Next item">
+        <i data-lucide="chevron-right" class="w-5 h-5 sm:w-6 sm:h-6"></i>
       </button>
+
+      <!-- Dynamic Scale Ruler in bottom right -->
+      <div id="scaleRuler" class="absolute bottom-3 right-4 z-40 bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-lg px-3 py-1.5 shadow-xl flex flex-col items-center pointer-events-none transition-all">
+        <div class="flex items-center w-full justify-between gap-1 mb-1">
+          <div class="w-0.5 h-2 bg-blue-400"></div>
+          <div id="scaleRulerBar" class="h-0.5 bg-blue-400 flex-1 min-w-[50px] max-w-[150px]"></div>
+          <div class="w-0.5 h-2 bg-blue-400"></div>
+        </div>
+        <span id="scaleRulerText" class="text-[10px] font-mono text-slate-300 font-semibold">1,000 km</span>
+      </div>
+
+      <!-- Comparison Pill Bar at bottom center -->
+      <div id="comparisonBar" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-full px-3.5 py-1 text-[11px] text-slate-300 shadow-xl flex items-center gap-2 pointer-events-none">
+        <i data-lucide="arrow-left-right" class="w-3.5 h-3.5 text-blue-400"></i>
+        <span id="comparisonText">Click or hover any item to compare</span>
+      </div>
     </div>
   </div>
 
   <script>
-    // --- Data & State ---
+    // --- Data & Presets ---
     const PRESETS = {
       planets: {
-        name: 'Planets & Moons (Diameter in km)',
+        name: 'Planets & Solar System (Diameter in km)',
         unit: 'km',
         data: [
-          { id: '1', name: 'Moon', value: 3474, color: '#d1d5db' },
-          { id: '2', name: 'Mercury', value: 4880, color: '#9ca3af' },
-          { id: '3', name: 'Mars', value: 6779, color: '#ef4444' },
-          { id: '4', name: 'Venus', value: 12104, color: '#f59e0b' },
-          { id: '5', name: 'Earth', value: 12742, color: '#3b82f6' },
-          { id: '6', name: 'Neptune', value: 49244, color: '#60a5fa' },
-          { id: '7', name: 'Uranus', value: 50724, color: '#818cf8' },
-          { id: '8', name: 'Saturn', value: 116460, color: '#fcd34d' },
-          { id: '9', name: 'Jupiter', value: 139820, color: '#fb923c' },
-          { id: '10', name: 'Sun', value: 1392700, color: '#eab308' },
+          { id: '1', name: 'Moon', value: 3474, color: '#94a3b8', visible: true },
+          { id: '2', name: 'Mercury', value: 4880, color: '#a8a29e', visible: true },
+          { id: '3', name: 'Mars', value: 6779, color: '#ef4444', visible: true },
+          { id: '4', name: 'Venus', value: 12104, color: '#f59e0b', visible: true },
+          { id: '5', name: 'Earth', value: 12742, color: '#3b82f6', visible: true },
+          { id: '6', name: 'Neptune', value: 49244, color: '#06b6d4', visible: true },
+          { id: '7', name: 'Uranus', value: 50724, color: '#818cf8', visible: true },
+          { id: '8', name: 'Saturn', value: 116460, color: '#fcd34d', visible: true },
+          { id: '9', name: 'Jupiter', value: 139820, color: '#fb923c', visible: true },
+          { id: '10', name: 'Sun', value: 1392700, color: '#eab308', visible: true },
         ]
       },
       animals: {
-        name: 'Creatures (Length in meters)',
+        name: 'Creatures & Beings (Length in meters)',
         unit: 'm',
         data: [
-          { id: '11', name: 'Ant', value: 0.01, color: '#1f2937' },
-          { id: '12', name: 'Mouse', value: 0.1, color: '#9ca3af' },
-          { id: '13', name: 'House Cat', value: 0.46, color: '#f97316' },
-          { id: '14', name: 'Human', value: 1.75, color: '#ec4899' },
-          { id: '15', name: 'Tiger', value: 3.1, color: '#f59e0b' },
-          { id: '16', name: 'Great White Shark', value: 4.5, color: '#94a3b8' },
-          { id: '17', name: 'African Elephant', value: 6, color: '#64748b' },
-          { id: '18', name: 'T-Rex', value: 12, color: '#4d7c0f' },
-          { id: '19', name: 'Blue Whale', value: 30, color: '#0284c7' },
+          { id: '11', name: 'Ant', value: 0.01, color: '#475569', visible: true },
+          { id: '12', name: 'Mouse', value: 0.1, color: '#9ca3af', visible: true },
+          { id: '13', name: 'House Cat', value: 0.46, color: '#f97316', visible: true },
+          { id: '14', name: 'Human', value: 1.75, color: '#ec4899', visible: true },
+          { id: '15', name: 'Tiger', value: 3.1, color: '#f59e0b', visible: true },
+          { id: '16', name: 'Great White Shark', value: 4.5, color: '#38bdf8', visible: true },
+          { id: '17', name: 'African Elephant', value: 6, color: '#64748b', visible: true },
+          { id: '18', name: 'T-Rex', value: 12, color: '#65a30d', visible: true },
+          { id: '19', name: 'Blue Whale', value: 30, color: '#0284c7', visible: true },
         ]
       },
       wealth: {
-        name: 'Wealth (in Billions USD)',
+        name: 'Wealth Comparison (Billions USD)',
         unit: 'B$',
         data: [
-          { id: '20', name: 'Average Net Worth', value: 0.0001, color: '#22c55e' },
-          { id: '21', name: 'Millionaire', value: 0.001, color: '#16a34a' },
-          { id: '22', name: 'A Billionaire', value: 1, color: '#15803d' },
-          { id: '23', name: 'Mark Zuckerberg', value: 175, color: '#2563eb' },
-          { id: '24', name: 'Elon Musk', value: 250, color: '#8b5cf6' },
-          { id: '25', name: 'Apple Market Cap', value: 3000, color: '#a8a29e' },
+          { id: '20', name: 'Average US Net Worth ($100K)', value: 0.0001, color: '#22c55e', visible: true },
+          { id: '21', name: 'Millionaire ($1M)', value: 0.001, color: '#16a34a', visible: true },
+          { id: '22', name: 'Billionaire ($1B)', value: 1, color: '#15803d', visible: true },
+          { id: '23', name: 'Mark Zuckerberg ($175B)', value: 175, color: '#2563eb', visible: true },
+          { id: '24', name: 'Elon Musk ($250B)', value: 250, color: '#8b5cf6', visible: true },
+          { id: '25', name: 'Apple Market Cap ($3T)', value: 3000, color: '#a8a29e', visible: true },
+        ]
+      },
+      buildings: {
+        name: 'Iconic Heights (in meters)',
+        unit: 'm',
+        data: [
+          { id: '31', name: 'Statue of Liberty', value: 93, color: '#10b981', visible: true },
+          { id: '32', name: 'Great Pyramid of Giza', value: 139, color: '#eab308', visible: true },
+          { id: '33', name: 'Eiffel Tower', value: 330, color: '#f97316', visible: true },
+          { id: '34', name: 'Empire State Building', value: 381, color: '#3b82f6', visible: true },
+          { id: '35', name: 'Burj Khalifa', value: 828, color: '#8b5cf6', visible: true },
+          { id: '36', name: 'Mount Everest', value: 8849, color: '#cbd5e1', visible: true },
+        ]
+      },
+      nanoscale: {
+        name: 'Nanoscale to Macro (in meters)',
+        unit: 'm',
+        data: [
+          { id: '41', name: 'Hydrogen Atom', value: 0.0000000001, color: '#38bdf8', visible: true },
+          { id: '42', name: 'DNA Helix Width', value: 0.000000002, color: '#818cf8', visible: true },
+          { id: '43', name: 'Coronavirus (120nm)', value: 0.00000012, color: '#f43f5e', visible: true },
+          { id: '44', name: 'Red Blood Cell', value: 0.000008, color: '#ef4444', visible: true },
+          { id: '45', name: 'Human Hair Width', value: 0.000075, color: '#d97706', visible: true },
+          { id: '46', name: 'Grain of Sand', value: 0.001, color: '#eab308', visible: true },
+          { id: '47', name: 'Ant', value: 0.01, color: '#64748b', visible: true },
+          { id: '48', name: 'Tennis Ball', value: 0.067, color: '#84cc16', visible: true },
         ]
       }
     };
 
-    const PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'];
+    const PALETTE = [
+      '#ef4444', '#f97316', '#f59e0b', '#10b981',
+      '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+      '#d946ef', '#ec4899', '#14b8a6', '#84cc16'
+    ];
+
+    const MIN_ZOOM = 0.01;
+    const MAX_ZOOM = 100000;
 
     let state = {
       activePreset: 'planets',
-      items: [...PRESETS.planets.data],
+      items: JSON.parse(JSON.stringify(PRESETS.planets.data)),
       unit: PRESETS.planets.unit,
       zoom: 1,
       viewMode: 'side-by-side', // 'overlapping' | 'side-by-side'
       sideBySideFocusId: null,
-      /** Left-to-right on side-by-side strip + sidebar list: 'asc' smallest first, 'desc' largest first */
-      stripOrder: 'asc',
+      stripOrder: 'asc', // 'asc' | 'desc'
+      panX: 0,
+      panY: 0,
+      hoveredItemId: null,
+      clearConfirmPending: false
     };
 
     // --- DOM Elements ---
     const presetSelect = document.getElementById('presetSelect');
     const unitInput = document.getElementById('unitInput');
+    const stripOrderSelect = document.getElementById('stripOrderSelect');
     const addItemForm = document.getElementById('addItemForm');
     const dataList = document.getElementById('dataList');
+    const itemCountBadge = document.getElementById('itemCountBadge');
+    const addSuccessToast = document.getElementById('addSuccessToast');
+    const newColorInput = document.getElementById('newColor');
+    const btnRandomColor = document.getElementById('btnRandomColor');
+    const btnClearAll = document.getElementById('btnClearAll');
     
     const btnOverlapping = document.getElementById('btnOverlapping');
     const btnSideBySide = document.getElementById('btnSideBySide');
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomLabelText = document.getElementById('zoomLabelText');
-    const canvasScrollArea = document.getElementById('canvasScrollArea');
+    const btnZoomOut = document.getElementById('btnZoomOut');
+    const btnZoomIn = document.getElementById('btnZoomIn');
+    const btnFitZoom = document.getElementById('btnFitZoom');
+    const btnResetZoom = document.getElementById('btnResetZoom');
     
+    const canvasViewport = document.getElementById('canvasViewport');
+    const overlappingContainer = document.getElementById('overlappingContainer');
+    const overlappingCanvas = document.getElementById('overlappingCanvas');
+    const sideBySideContainer = document.getElementById('sideBySideContainer');
     const navLeftBtn = document.getElementById('navLeftBtn');
     const navRightBtn = document.getElementById('navRightBtn');
-    const visualizerPanel = document.getElementById('visualizerPanel');
-    const canvasViewport = document.getElementById('canvasViewport');
-    const btnClearAll = document.getElementById('btnClearAll');
-    const btnFitZoom = document.getElementById('btnFitZoom');
-    const stripOrderSelect = document.getElementById('stripOrderSelect');
-    const listOrderHint = document.getElementById('listOrderHint');
+    
+    const offscreenHud = document.getElementById('offscreenHud');
+    const offscreenHudDot = document.getElementById('offscreenHudDot');
+    const offscreenHudText = document.getElementById('offscreenHudText');
+    const btnResetHudPan = document.getElementById('btnResetHudPan');
+    
+    const scaleRuler = document.getElementById('scaleRuler');
+    const scaleRulerBar = document.getElementById('scaleRulerBar');
+    const scaleRulerText = document.getElementById('scaleRulerText');
+    const comparisonBar = document.getElementById('comparisonBar');
+    const comparisonText = document.getElementById('comparisonText');
 
-    // --- Format Helpers ---
+    // --- Number & Text Formatting ---
     function escapeHtml(str) {
       if (str == null) return '';
       const div = document.createElement('div');
@@ -321,70 +486,240 @@
     }
 
     function formatZoomLabel(z) {
-      if (z < 1) return z.toFixed(3) + 'x';
-      const n = Math.round(z);
-      if (Math.abs(z - n) < 0.01) return n + 'x';
-      return z.toFixed(1) + 'x';
+      if (z < 0.1) return z.toFixed(2) + 'x';
+      if (z < 10) return z.toFixed(1) + 'x';
+      if (z >= 1000) return (z >= 1000000 ? (z / 1000000).toFixed(1) + 'M' : (z / 1000).toFixed(0) + 'k') + 'x';
+      return Math.round(z) + 'x';
     }
 
     function formatNumber(num) {
-      if (num < 0.01) return num.toExponential(2);
-      return new Intl.NumberFormat('en-US', { 
+      if (num === 0) return '0';
+      if (num >= 0.0001 && num < 10000) {
+        // Natural clean numbers without scientific notation
+        return Number(num.toFixed(num < 1 ? 4 : 2)).toString();
+      }
+      if (num < 0.0001) {
+        return num.toExponential(2);
+      }
+      return new Intl.NumberFormat('en-US', {
         notation: num >= 10000 ? "compact" : "standard",
-        maximumFractionDigits: 2 
+        maximumFractionDigits: 2
       }).format(num);
     }
 
-    function getSortedItems() {
-      return [...state.items].sort((a, b) => b.value - a.value);
+    function formatExactNumber(num) {
+      if (num < 0.00001) return num.toExponential(4);
+      return new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 6
+      }).format(num);
     }
 
-    /** Items in sidebar list and left-to-right on side-by-side strip (not used for overlapping stack draw order). */
-    function getStripAndListOrderItems() {
+    // --- Data Accessors ---
+    function getVisibleItems() {
+      return state.items.filter(item => item.visible !== false);
+    }
+
+    function getSortedItems() {
+      return [...getVisibleItems()].sort((a, b) => b.value - a.value);
+    }
+
+    function getDisplayOrderItems() {
       const sorted = getSortedItems();
-      if (state.stripOrder === 'asc') return [...sorted].reverse();
-      return sorted;
+      return state.stripOrder === 'asc' ? [...sorted].reverse() : sorted;
     }
 
     function getMaxValue() {
-      if (state.items.length === 0) return 1;
-      return Math.max(...state.items.map(item => item.value));
+      const visible = getVisibleItems();
+      if (visible.length === 0) return 1;
+      return Math.max(...visible.map(i => i.value));
     }
 
     function getMinValue() {
-      if (state.items.length === 0) return 1;
-      return Math.min(...state.items.map(item => item.value));
+      const visible = getVisibleItems();
+      if (visible.length === 0) return 1;
+      return Math.min(...visible.map(i => i.value));
     }
 
-    /** Zoom needed so every item passes overlapping visibility threshold (0.5% height). */
+    // --- Zoom & Scale System ---
+    function setZoom(newZoom, updateCenter = false) {
+      const safeZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, isNaN(newZoom) ? 1 : newZoom));
+      state.zoom = safeZoom;
+      
+      const logVal = Math.log10(state.zoom);
+      zoomSlider.value = logVal;
+      zoomLabelText.textContent = formatZoomLabel(state.zoom);
+      
+      if (state.viewMode === 'overlapping') {
+        updateOverlappingSizes();
+      } else {
+        updateSideBySideSizes();
+        if (updateCenter && state.sideBySideFocusId) {
+          centerSideBySideItem(state.sideBySideFocusId, false);
+        }
+      }
+      updateScaleRuler();
+      checkOffscreenHud();
+    }
+
     function computeFitZoom() {
-      if (state.items.length === 0) return 1;
+      const visible = getVisibleItems();
+      if (visible.length === 0) return 1;
+
+      if (state.viewMode === 'overlapping') {
+        // In overlapping mode, 1.0x fits the largest circle at 75% of viewport height
+        state.panX = 0;
+        state.panY = 0;
+        applyOverlappingPan();
+        return 1.0;
+      } else {
+        // In side-by-side mode, fit all circles horizontally into viewport width
+        const viewportWidth = canvasViewport.clientWidth || 800;
+        const viewportHeight = canvasViewport.clientHeight || 500;
+        const maxValue = getMaxValue();
+        const gap = 32; // gap-8
+        const padding = 120; // horizontal padding
+        
+        let sumBaseWidthPx = 0;
+        visible.forEach(item => {
+          const basePct = (item.value / maxValue) * 75;
+          const basePx = (basePct / 100) * viewportHeight;
+          sumBaseWidthPx += Math.max(16, basePx);
+        });
+
+        const totalGaps = Math.max(0, visible.length - 1) * gap + padding;
+        const availablePx = Math.max(100, viewportWidth - totalGaps);
+        
+        if (sumBaseWidthPx > 0) {
+          const calculatedFit = availablePx / sumBaseWidthPx;
+          return Math.min(10, Math.max(0.02, calculatedFit));
+        }
+        return 1.0;
+      }
+    }
+
+    function updateScaleRuler() {
+      const visible = getVisibleItems();
+      if (visible.length === 0) {
+        scaleRuler.classList.add('opacity-0');
+        return;
+      }
+      scaleRuler.classList.remove('opacity-0');
+
+      const viewportHeight = canvasViewport.clientHeight || 500;
       const maxValue = getMaxValue();
-      let need = 0.01;
-      state.items.forEach((item) => {
-        const basePct = (item.value / maxValue) * 80;
-        if (basePct > 0) need = Math.max(need, 0.5 / basePct);
+      // At current zoom, height in px for maxValue is: (75/100) * viewportHeight * zoom
+      const maxItemHeightPx = 0.75 * viewportHeight * state.zoom;
+      if (maxItemHeightPx <= 0) return;
+
+      const unitsPerPixel = maxValue / maxItemHeightPx;
+      // Target ruler width between 60px and 140px
+      const targetPixels = 100;
+      const rawUnits = unitsPerPixel * targetPixels;
+
+      // Find clean power of 10
+      const exponent = Math.floor(Math.log10(rawUnits));
+      const fraction = rawUnits / Math.pow(10, exponent);
+      
+      let cleanMultiplier = 1;
+      if (fraction >= 5) cleanMultiplier = 5;
+      else if (fraction >= 2) cleanMultiplier = 2;
+      else cleanMultiplier = 1;
+
+      const cleanUnits = cleanMultiplier * Math.pow(10, exponent);
+      const actualPixels = Math.max(30, Math.min(180, cleanUnits / unitsPerPixel));
+
+      scaleRulerBar.style.width = `${actualPixels}px`;
+      scaleRulerText.textContent = `${formatNumber(cleanUnits)} ${state.unit}`;
+    }
+
+    // --- Pan & Drag Canvas System ---
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let startScrollLeft = 0;
+    let startPanX = 0;
+    let startPanY = 0;
+
+    function initDragToPan() {
+      canvasViewport.addEventListener('mousedown', (e) => {
+        // Ignore clicks on buttons, inputs or scrollbars
+        if (e.target.closest('button, input, select, a')) return;
+        
+        isDragging = true;
+        canvasViewport.classList.add('cursor-grabbing');
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        startScrollLeft = sideBySideContainer.scrollLeft;
+        startPanX = state.panX;
+        startPanY = state.panY;
       });
-      return Math.min(1e5, Math.max(0.01, need));
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+
+        if (state.viewMode === 'side-by-side') {
+          sideBySideContainer.scrollLeft = startScrollLeft - dx;
+        } else {
+          state.panX = startPanX + dx;
+          state.panY = startPanY + dy;
+          applyOverlappingPan();
+          checkOffscreenHud();
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          canvasViewport.classList.remove('cursor-grabbing');
+        }
+      });
+
+      // Double-click canvas to reset view/pan
+      canvasViewport.addEventListener('dblclick', (e) => {
+        if (e.target.closest('button, input, select')) return;
+        if (state.viewMode === 'overlapping') {
+          state.panX = 0;
+          state.panY = 0;
+          applyOverlappingPan();
+          checkOffscreenHud();
+        } else {
+          setZoom(1);
+        }
+      });
     }
 
-    function escapeAttrSelector(id) {
-      const s = String(id);
-      if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(s);
-      return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    function applyOverlappingPan() {
+      overlappingCanvas.style.transform = `translate(${state.panX}px, ${state.panY}px)`;
     }
 
-    function queryCircleByItemId(id) {
-      return canvasScrollArea.querySelector(`.circle-container[data-id="${escapeAttrSelector(id)}"]`);
-    }
+    // --- Side-by-Side Navigation & Scroll ---
+    function updateNavButtonsState() {
+      if (state.viewMode !== 'side-by-side') {
+        navLeftBtn.classList.add('hidden');
+        navRightBtn.classList.add('hidden');
+        return;
+      }
+      
+      navLeftBtn.classList.remove('hidden');
+      navRightBtn.classList.remove('hidden');
 
-    /** Left-to-right id order on the strip (matches arrow navigation). */
-    function getSideBySideDisplayOrderIds() {
-      return getStripAndListOrderItems().map((item) => item.id);
+      const ids = getDisplayOrderItems().map(i => i.id);
+      if (ids.length <= 1) {
+        navLeftBtn.disabled = true;
+        navRightBtn.disabled = true;
+        return;
+      }
+
+      ensureSideBySideFocus();
+      const idx = ids.indexOf(state.sideBySideFocusId);
+      navLeftBtn.disabled = (idx <= 0);
+      navRightBtn.disabled = (idx >= ids.length - 1);
     }
 
     function ensureSideBySideFocus() {
-      const ids = getSideBySideDisplayOrderIds();
+      const ids = getDisplayOrderItems().map(i => i.id);
       if (ids.length === 0) {
         state.sideBySideFocusId = null;
         return;
@@ -394,308 +729,462 @@
       }
     }
 
-    /** % of canvas height for the focused circle after zoom (same base scale as render: value/max * 80 * zoom). */
-    const SIDE_BY_SIDE_FOCUS_TARGET_PCT = 55;
-
-    function zoomSideBySideToItemById(itemId) {
-      if (state.viewMode !== 'side-by-side' || !itemId) return;
-      const item = state.items.find((i) => i.id === itemId);
-      if (!item) return;
-      const maxValue = getMaxValue();
-      const basePct = (item.value / maxValue) * 80;
-      if (basePct <= 0) return;
-      const z = SIDE_BY_SIDE_FOCUS_TARGET_PCT / basePct;
-      setZoom(Math.min(1e5, Math.max(0.01, z)));
-    }
-
-    function applySideBySideFocusVisuals(scrollIntoViewToo = true) {
+    function navigateSideBySide(direction) {
       if (state.viewMode !== 'side-by-side') return;
-      canvasScrollArea.querySelectorAll('.circle-container').forEach((el) => {
-        el.classList.remove('side-by-side-target');
-      });
-      if (!state.sideBySideFocusId) return;
-      const el = queryCircleByItemId(state.sideBySideFocusId);
-      if (!el) return;
-      el.classList.add('side-by-side-target');
-      if (scrollIntoViewToo && typeof el.scrollIntoView === 'function') {
-        el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-
-    function navigateSideBySideStep(direction) {
-      if (state.viewMode !== 'side-by-side') return;
-      const ids = getSideBySideDisplayOrderIds();
+      const ids = getDisplayOrderItems().map(i => i.id);
       if (ids.length === 0) return;
+      
       ensureSideBySideFocus();
       let idx = ids.indexOf(state.sideBySideFocusId);
       if (idx < 0) idx = 0;
-      if (direction === 'right') idx = Math.min(ids.length - 1, idx + 1);
-      else idx = Math.max(0, idx - 1);
+      
+      if (direction === 'right') {
+        if (idx < ids.length - 1) idx++;
+      } else {
+        if (idx > 0) idx--;
+      }
+      
       state.sideBySideFocusId = ids[idx];
-      zoomSideBySideToItemById(state.sideBySideFocusId);
-      applySideBySideFocusVisuals(true);
+      updateSideBySideFocusClasses();
+      centerSideBySideItem(state.sideBySideFocusId, true);
+      updateNavButtonsState();
+      updateComparisonHUD(state.sideBySideFocusId);
     }
 
-    // --- Rendering logic ---
+    function centerSideBySideItem(itemId, smooth = true) {
+      const container = sideBySideContainer.querySelector(`.circle-container[data-id="${itemId}"]`);
+      if (!container) return;
 
+      const containerOffsetLeft = container.offsetLeft;
+      const containerWidth = container.offsetWidth;
+      const viewportWidth = sideBySideContainer.clientWidth;
+      const targetScroll = containerOffsetLeft - (viewportWidth / 2) + (containerWidth / 2);
+
+      sideBySideContainer.scrollTo({
+        left: Math.max(0, targetScroll),
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+
+    function updateSideBySideFocusClasses() {
+      sideBySideContainer.querySelectorAll('.circle-container').forEach(el => {
+        el.classList.toggle('side-by-side-target', el.dataset.id === state.sideBySideFocusId);
+      });
+    }
+
+    // --- Off-Screen HUD Logic ---
+    function checkOffscreenHud() {
+      if (state.viewMode !== 'overlapping' || !state.hoveredItemId) {
+        offscreenHud.classList.add('hidden');
+        return;
+      }
+
+      const item = state.items.find(i => i.id === state.hoveredItemId);
+      if (!item) {
+        offscreenHud.classList.add('hidden');
+        return;
+      }
+
+      const maxValue = getMaxValue();
+      const basePct = (item.value / maxValue) * 75;
+      const zoomedHeightPct = basePct * state.zoom;
+      
+      // If circle is taller than canvas or top is scrolled off-screen
+      if (zoomedHeightPct > 105) {
+        offscreenHud.classList.remove('hidden');
+        offscreenHudDot.style.backgroundColor = item.color;
+        offscreenHudText.innerHTML = `Viewing: <strong class="text-white">${escapeHtml(item.name)}</strong> (${formatNumber(item.value)} ${escapeHtml(state.unit)})`;
+      } else {
+        offscreenHud.classList.add('hidden');
+      }
+    }
+
+    // --- Comparison Bar HUD ---
+    function updateComparisonHUD(activeId) {
+      const item = state.items.find(i => i.id === activeId);
+      if (!item) {
+        comparisonText.textContent = 'Click or hover any item to compare';
+        return;
+      }
+
+      const minValue = getMinValue();
+      const minItem = state.items.find(i => i.value === minValue && i.visible !== false);
+      const maxValue = getMaxValue();
+      const maxItem = state.items.find(i => i.value === maxValue && i.visible !== false);
+
+      if (minItem && minItem.id !== item.id) {
+        const ratio = item.value / minItem.value;
+        comparisonText.innerHTML = `<span class="font-semibold text-white">${escapeHtml(item.name)}</span> is <strong class="text-blue-400 font-mono">${formatNumber(ratio)}×</strong> larger than <span class="text-slate-400">${escapeHtml(minItem.name)}</span>`;
+      } else if (maxItem && maxItem.id !== item.id) {
+        const ratio = maxItem.value / item.value;
+        comparisonText.innerHTML = `<span class="font-semibold text-white">${escapeHtml(item.name)}</span> is <strong class="text-amber-400 font-mono">1/${formatNumber(ratio)}</strong> the size of <span class="text-slate-400">${escapeHtml(maxItem.name)}</span>`;
+      } else {
+        comparisonText.innerHTML = `<span class="font-semibold text-white">${escapeHtml(item.name)}</span> (${formatNumber(item.value)} ${escapeHtml(state.unit)})`;
+      }
+    }
+
+    // --- Rendering: Sidebar List ---
+    function renderSidebarList() {
+      dataList.innerHTML = '';
+      const visible = getVisibleItems();
+      itemCountBadge.textContent = `${visible.length} of ${state.items.length} items`;
+
+      if (state.items.length === 0) {
+        dataList.innerHTML = `
+          <div class="text-center p-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+            No items in dataset.<br>Load a preset or add items above.
+          </div>`;
+        return;
+      }
+
+      getDisplayOrderItems().forEach(item => {
+        const row = document.createElement('div');
+        row.className = `group flex items-center justify-between p-2 rounded-lg border transition-all ${item.visible !== false ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700' : 'bg-slate-900/20 border-slate-800/40 opacity-50'}`;
+        row.dataset.id = item.id;
+        
+        row.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer select-none">
+            <button type="button" class="btn-toggle-vis text-slate-500 hover:text-white p-0.5 rounded transition-colors" title="${item.visible !== false ? 'Hide item' : 'Show item'}">
+              <i data-lucide="${item.visible !== false ? 'eye' : 'eye-off'}" class="w-3.5 h-3.5"></i>
+            </button>
+            <div class="w-3 h-3 rounded-full shrink-0 shadow-sm" style="background-color: ${item.color}"></div>
+            <span class="text-xs font-medium text-slate-200 truncate group-hover:text-white">${escapeHtml(item.name)}</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 ml-2">
+            <span class="text-[11px] text-slate-400 font-mono" title="Exact: ${formatExactNumber(item.value)} ${escapeHtml(state.unit)}">${formatNumber(item.value)} <span class="text-slate-500">${escapeHtml(state.unit)}</span></span>
+            <button type="button" class="btn-remove-item text-slate-500 hover:text-red-400 hover:bg-slate-800 p-1 rounded transition-colors" title="Delete item">
+              <i data-lucide="trash-2" class="w-3 h-3"></i>
+            </button>
+          </div>
+        `;
+
+        // Row Click: Focus item
+        row.querySelector('.flex-1').addEventListener('click', () => {
+          focusItem(item.id);
+        });
+
+        // Hover linkages
+        row.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
+        row.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
+
+        // Toggle visibility
+        row.querySelector('.btn-toggle-vis').addEventListener('click', (e) => {
+          e.stopPropagation();
+          item.visible = (item.visible === false);
+          renderSidebarList();
+          renderCanvas(false);
+        });
+
+        // Remove item
+        row.querySelector('.btn-remove-item').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteItem(item.id);
+        });
+
+        dataList.appendChild(row);
+      });
+
+      lucide.createIcons();
+    }
+
+    function deleteItem(id) {
+      if (state.sideBySideFocusId === id) state.sideBySideFocusId = null;
+      state.items = state.items.filter(i => i.id !== id);
+      renderSidebarList();
+      renderCanvas(true);
+    }
+
+    function focusItem(id) {
+      state.sideBySideFocusId = id;
+      state.hoveredItemId = id;
+      updateComparisonHUD(id);
+      
+      if (state.viewMode === 'side-by-side') {
+        updateSideBySideFocusClasses();
+        centerSideBySideItem(id, true);
+        updateNavButtonsState();
+      } else {
+        // In overlapping mode, if item is tiny, zoom in so it is easily visible
+        const item = state.items.find(i => i.id === id);
+        if (item) {
+          const maxValue = getMaxValue();
+          const basePct = (item.value / maxValue) * 75;
+          if (basePct * state.zoom < 10) {
+            setZoom(Math.min(MAX_ZOOM, 25 / Math.max(0.00001, basePct)));
+          }
+          highlightCanvasItem(id, true);
+        }
+      }
+    }
+
+    // --- Rendering: Canvas ---
+    function renderCanvas(triggerAnimation = false) {
+      const visible = getVisibleItems();
+      const maxValue = getMaxValue();
+      const minValue = getMinValue();
+
+      // Switch container visibility
+      if (state.viewMode === 'side-by-side') {
+        overlappingContainer.classList.add('hidden');
+        sideBySideContainer.classList.remove('hidden');
+        renderSideBySideView(visible, maxValue, minValue, triggerAnimation);
+      } else {
+        sideBySideContainer.classList.add('hidden');
+        overlappingContainer.classList.remove('hidden');
+        renderOverlappingView(visible, maxValue, minValue, triggerAnimation);
+      }
+
+      updateScaleRuler();
+      updateNavButtonsState();
+      checkOffscreenHud();
+    }
+
+    function renderOverlappingView(visible, maxValue, minValue, triggerAnimation) {
+      overlappingCanvas.innerHTML = '';
+
+      if (visible.length === 0) {
+        overlappingCanvas.innerHTML = `
+          <div class="w-full h-full flex items-center justify-center text-slate-500">
+            <div class="text-center p-6">
+              <i data-lucide="layers" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
+              <p class="text-sm font-medium">No visible items.</p>
+              <p class="text-xs text-slate-600 mt-1">Enable items in the sidebar or add new ones.</p>
+            </div>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      // Sorted largest to smallest so largest is in background, smallest on top
+      const sorted = getSortedItems();
+
+      sorted.forEach((item, index) => {
+        const basePct = (item.value / maxValue) * 75;
+        const zoomedPct = basePct * state.zoom;
+        const isSubPixel = zoomedPct < 0.8;
+
+        const container = document.createElement('div');
+        container.className = 'circle-container absolute bottom-12 left-1/2 -translate-x-1/2 pointer-events-auto rounded-full cursor-pointer transition-[width,height] duration-200';
+        container.dataset.id = item.id;
+        container.dataset.basePct = basePct;
+        container.style.aspectRatio = '1 / 1';
+        container.style.zIndex = String(10 + index);
+
+        if (isSubPixel) {
+          // Render a minimum visible target with glowing pulse so it's always interactable
+          container.style.width = '14px';
+          container.style.height = '14px';
+          container.style.bottom = '52px';
+          container.classList.add('animate-micro-pulse');
+        } else {
+          container.style.width = `${zoomedPct}%`;
+          container.style.height = `${zoomedPct}%`;
+          container.style.bottom = '48px';
+        }
+
+        const circle = document.createElement('div');
+        circle.className = `w-full h-full rounded-full transition-all duration-200 circle-shape ${triggerAnimation ? 'animate-pop-in' : ''}`;
+        circle.style.backgroundColor = `${item.color}26`; // 15% opacity fill
+        circle.style.border = isSubPixel ? `2px solid ${item.color}` : `2px solid ${item.color}`;
+
+        // Tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'circle-tooltip overlapping-tooltip absolute top-0 left-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border shadow-2xl flex flex-col items-center opacity-0 pointer-events-none z-50';
+        tooltip.style.borderColor = item.color;
+        
+        const ratioText = (minValue > 0 && item.value !== minValue)
+          ? `<span class="text-[10px] text-slate-400 mt-0.5 font-mono">${formatNumber(item.value / minValue)}× vs smallest</span>`
+          : '';
+
+        tooltip.innerHTML = `
+          <div class="flex items-center gap-1.5">
+            <div class="w-2 h-2 rounded-full" style="background-color: ${item.color}"></div>
+            <span class="font-bold text-white text-xs">${escapeHtml(item.name)}</span>
+          </div>
+          <span class="text-[11px] text-slate-300 font-mono">${formatNumber(item.value)} ${escapeHtml(state.unit)}</span>
+          ${ratioText}
+        `;
+
+        container.appendChild(circle);
+        container.appendChild(tooltip);
+
+        // Interaction
+        container.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
+        container.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
+        container.addEventListener('click', () => {
+          focusItem(item.id);
+        });
+
+        overlappingCanvas.appendChild(container);
+      });
+    }
+
+    function updateOverlappingSizes() {
+      overlappingCanvas.querySelectorAll('.circle-container').forEach(container => {
+        const basePct = parseFloat(container.dataset.basePct);
+        const zoomedPct = basePct * state.zoom;
+        const isSubPixel = zoomedPct < 0.8;
+
+        if (isSubPixel) {
+          container.style.width = '14px';
+          container.style.height = '14px';
+          container.style.bottom = '52px';
+          container.classList.add('animate-micro-pulse');
+        } else {
+          container.style.width = `${zoomedPct}%`;
+          container.style.height = `${zoomedPct}%`;
+          container.style.bottom = '48px';
+          container.classList.remove('animate-micro-pulse');
+        }
+      });
+    }
+
+    function renderSideBySideView(visible, maxValue, minValue, triggerAnimation) {
+      sideBySideContainer.innerHTML = '';
+
+      if (visible.length === 0) {
+        sideBySideContainer.innerHTML = `
+          <div class="w-full h-full flex items-center justify-center text-slate-500">
+            <div class="text-center p-6">
+              <i data-lucide="columns" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
+              <p class="text-sm font-medium">No visible items.</p>
+              <p class="text-xs text-slate-600 mt-1">Enable items in the sidebar or add new ones.</p>
+            </div>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      const displayItems = getDisplayOrderItems();
+      ensureSideBySideFocus();
+
+      displayItems.forEach(item => {
+        const basePct = (item.value / maxValue) * 75;
+        const zoomedPct = Math.max(0.5, basePct * state.zoom);
+
+        const container = document.createElement('div');
+        container.className = `circle-container relative shrink-0 rounded-full cursor-pointer transition-all duration-200 ${item.id === state.sideBySideFocusId ? 'side-by-side-target' : ''}`;
+        container.dataset.id = item.id;
+        container.dataset.basePct = basePct;
+        container.style.height = `${zoomedPct}%`;
+        container.style.aspectRatio = '1 / 1';
+        container.style.minHeight = '14px';
+        container.style.minWidth = '14px';
+
+        const circle = document.createElement('div');
+        circle.className = `w-full h-full rounded-full transition-all duration-200 circle-shape ${triggerAnimation ? 'animate-pop-in' : ''}`;
+        circle.style.backgroundColor = `${item.color}26`;
+        circle.style.border = `2px solid ${item.color}`;
+
+        // Bottom pin tooltip so it doesn't clip on top
+        const tooltip = document.createElement('div');
+        tooltip.className = 'circle-tooltip side-by-side-tooltip absolute bottom-full left-1/2 whitespace-nowrap px-3 py-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border shadow-2xl flex flex-col items-center pointer-events-none z-50';
+        tooltip.style.borderColor = item.color;
+
+        const ratioText = (minValue > 0 && item.value !== minValue)
+          ? `<span class="text-[10px] text-slate-400 mt-0.5 font-mono">${formatNumber(item.value / minValue)}× vs smallest</span>`
+          : '';
+
+        tooltip.innerHTML = `
+          <div class="flex items-center gap-1.5">
+            <div class="w-2 h-2 rounded-full" style="background-color: ${item.color}"></div>
+            <span class="font-bold text-white text-xs">${escapeHtml(item.name)}</span>
+          </div>
+          <span class="text-[11px] text-slate-300 font-mono">${formatNumber(item.value)} ${escapeHtml(state.unit)}</span>
+          ${ratioText}
+        `;
+
+        container.appendChild(circle);
+        container.appendChild(tooltip);
+
+        container.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
+        container.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
+        container.addEventListener('click', () => {
+          state.sideBySideFocusId = item.id;
+          updateSideBySideFocusClasses();
+          centerSideBySideItem(item.id, true);
+          updateNavButtonsState();
+          updateComparisonHUD(item.id);
+        });
+
+        sideBySideContainer.appendChild(container);
+      });
+
+      requestAnimationFrame(() => {
+        if (state.sideBySideFocusId) {
+          centerSideBySideItem(state.sideBySideFocusId, false);
+        }
+      });
+    }
+
+    function updateSideBySideSizes() {
+      sideBySideContainer.querySelectorAll('.circle-container').forEach(container => {
+        const basePct = parseFloat(container.dataset.basePct);
+        const zoomedPct = Math.max(0.5, basePct * state.zoom);
+        container.style.height = `${zoomedPct}%`;
+      });
+    }
+
+    function highlightCanvasItem(id, isHovered) {
+      state.hoveredItemId = isHovered ? id : null;
+      
+      const container = (state.viewMode === 'overlapping' ? overlappingCanvas : sideBySideContainer)
+        .querySelector(`.circle-container[data-id="${id}"]`);
+      
+      if (container) {
+        const circle = container.querySelector('.circle-shape');
+        const tooltip = container.querySelector('.circle-tooltip');
+
+        if (isHovered) {
+          container.classList.add('is-hovered');
+          circle.style.boxShadow = `0 0 25px ${circle.style.borderColor}, inset 0 0 15px ${circle.style.borderColor}66`;
+          if (tooltip) tooltip.style.opacity = '1';
+        } else {
+          container.classList.remove('is-hovered');
+          circle.style.boxShadow = '';
+          if (tooltip && state.viewMode === 'overlapping' && !container.classList.contains('animate-micro-pulse')) {
+            tooltip.style.opacity = '0';
+          }
+        }
+      }
+
+      if (isHovered) {
+        updateComparisonHUD(id);
+      }
+      checkOffscreenHud();
+    }
+
+    // --- Init Presets Dropdown ---
     function initPresets() {
       presetSelect.innerHTML = '';
       for (const [key, data] of Object.entries(PRESETS)) {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = data.name;
-        presetSelect.appendChild(option);
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = data.name;
+        presetSelect.appendChild(opt);
       }
       presetSelect.value = state.activePreset;
       unitInput.value = state.unit;
       stripOrderSelect.value = state.stripOrder;
     }
 
-    function renderSidebarList() {
-      dataList.innerHTML = '';
-      if (state.items.length === 0) {
-        dataList.innerHTML = `<div class="text-center p-4 text-sm text-slate-500 border border-dashed border-slate-800 rounded-lg">No items. Add some above!</div>`;
-        listOrderHint.textContent = '—';
-        return;
-      }
-
-      listOrderHint.textContent =
-        state.stripOrder === 'asc' ? 'Smallest → largest' : 'Largest → smallest';
-
-      getStripAndListOrderItems().forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'flex items-center justify-between p-2 rounded-lg border bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-all';
-        div.innerHTML = `
-          <div class="flex items-center gap-3 truncate">
-            <div class="w-3 h-3 rounded-full shrink-0 shadow-sm" style="background-color: ${item.color}"></div>
-            <span class="text-sm font-medium truncate">${escapeHtml(item.name)}</span>
-          </div>
-          <div class="flex items-center gap-3 shrink-0 ml-2">
-            <span class="text-xs text-slate-400 font-mono">${formatNumber(item.value)} ${escapeHtml(state.unit)}</span>
-            <button onclick="removeItem('${item.id}')" class="text-slate-500 hover:text-red-400 hover:bg-slate-800 p-1 rounded-md transition-colors">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
-            </button>
-          </div>
-        `;
-        
-        // Add hover effects linked to canvas
-        div.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
-        div.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
-        
-        dataList.appendChild(div);
-      });
-      lucide.createIcons();
-    }
-
-    function renderCanvas(triggerAnimation = false, options = {}) {
-      const sideBySideZoomToFocus = options.sideBySideZoomToFocus === true;
-      canvasScrollArea.innerHTML = '';
-      
-      // Update layout mode
-      if (state.viewMode === 'side-by-side') {
-        canvasScrollArea.className = 'w-full h-full min-h-0 relative z-0 isolate flex items-end justify-start gap-8 overflow-x-auto overflow-y-hidden pb-8 px-12 custom-scrollbar';
-        navLeftBtn.classList.remove('hidden');
-        navRightBtn.classList.remove('hidden');
-      } else {
-        canvasScrollArea.className = 'w-full h-full min-h-0 relative z-0 isolate';
-        navLeftBtn.classList.add('hidden');
-        navRightBtn.classList.add('hidden');
-      }
-
-      if (state.items.length === 0) {
-        canvasScrollArea.innerHTML = `
-          <div class="w-full h-full flex items-center justify-center text-slate-500 absolute inset-0">
-            <div class="text-center">
-              <i data-lucide="maximize-2" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-              <p>No items to compare.</p>
-              <p class="text-sm">Add custom items or load a preset from the sidebar.</p>
-            </div>
-          </div>
-        `;
-        lucide.createIcons();
-        return;
-      }
-
-      const maxValue = getMaxValue();
-      const minValue = getMinValue();
-      const displayItems =
-        state.viewMode === 'side-by-side' ? getStripAndListOrderItems() : getSortedItems();
-
-      /** Fixed center line so circles zoom in place; translateX(-50%) on the circle would drift when width changes with height + transition-all. */
-      let overlapParent = canvasScrollArea;
-      if (state.viewMode === 'overlapping') {
-        const anchor = document.createElement('div');
-        anchor.className =
-          'absolute bottom-0 left-1/2 h-full w-px -translate-x-1/2 overflow-visible pointer-events-none z-0';
-        canvasScrollArea.appendChild(anchor);
-        overlapParent = anchor;
-      }
-
-      let overlapStack = 0;
-      displayItems.forEach((item) => {
-        const baseHeightPct = (item.value / maxValue) * 80; 
-        const zoomedHeightPct = baseHeightPct * state.zoom;
-        const isTooSmall = zoomedHeightPct < 0.5;
-
-        // In overlapping mode, skip rendering microscopic items unless we zoom in
-        if (isTooSmall && state.viewMode === 'overlapping') return;
-
-        const container = document.createElement('div');
-        const overlapGeom =
-          'absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto transition-[height] duration-700 ease-out';
-        const sideGeom = 'relative shrink-0 transition-all duration-700 ease-out';
-        container.className = `circle-container rounded-full cursor-pointer group ${state.viewMode === 'overlapping' ? overlapGeom : sideGeom}`;
-        container.style.height = `${Math.max(0.1, zoomedHeightPct)}%`;
-        container.style.aspectRatio = '1 / 1';
-        if (state.viewMode === 'overlapping') {
-          const z = 10 + overlapStack;
-          overlapStack += 1;
-          container.dataset.stackZ = String(z);
-          container.style.zIndex = String(z);
-        } else {
-          container.style.zIndex = '10';
-          delete container.dataset.stackZ;
-        }
-        container.dataset.id = item.id;
-        container.dataset.basePct = baseHeightPct; // Store for easy zoom updates
-
-        // The colored circle
-        const circle = document.createElement('div');
-        circle.className = `w-full h-full rounded-full transition-all duration-300 circle-shape ${triggerAnimation ? 'animate-pop-in' : ''}`;
-        circle.style.backgroundColor = `${item.color}33`;
-        circle.style.border = `2px solid ${item.color}`;
-        
-        // Tooltip
-        const tooltip = document.createElement('div');
-        tooltip.className = `circle-tooltip absolute whitespace-nowrap px-3 py-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border shadow-2xl flex flex-col items-center pointer-events-none ${state.viewMode === 'overlapping' ? 'top-0 left-1/2 -translate-y-1/2' : 'bottom-[100%] left-1/2 mb-4'}`;
-        tooltip.style.borderColor = item.color;
-        
-        // Hide tooltip if extremely small in overlapping mode until hovered (handled by css hover)
-        if(isTooSmall) tooltip.style.opacity = '0';
-
-        const ratioLine =
-          minValue > 0 && state.items.length > 1 && Math.abs(item.value - minValue) > 1e-15
-            ? `<span class="text-[10px] text-slate-500 mt-0.5">${formatNumber(item.value / minValue)}× vs smallest</span>`
-            : '';
-        tooltip.innerHTML = `
-          <span class="font-bold text-white text-sm drop-shadow-md">${escapeHtml(item.name)}</span>
-          <span class="text-xs text-slate-300 font-mono">${formatNumber(item.value)} ${escapeHtml(state.unit)}</span>
-          ${ratioLine}
-        `;
-
-        // Center line for huge overlapping items
-        const centerLine = document.createElement('div');
-        centerLine.className = "hidden absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-full border-l border-dashed border-white/30 pointer-events-none center-line";
-
-        container.appendChild(circle);
-        container.appendChild(tooltip);
-        container.appendChild(centerLine);
-        
-        // Hover Events for standard interactions
-        container.addEventListener('mouseenter', () => highlightCanvasItem(item.id, true));
-        container.addEventListener('mouseleave', () => highlightCanvasItem(item.id, false));
-        container.addEventListener('click', () => {
-          if (state.viewMode !== 'side-by-side') return;
-          state.sideBySideFocusId = item.id;
-          zoomSideBySideToItemById(item.id);
-          applySideBySideFocusVisuals(true);
-        });
-
-        overlapParent.appendChild(container);
-      });
-
-      if (state.viewMode === 'side-by-side') {
-        ensureSideBySideFocus();
-        if (sideBySideZoomToFocus && state.sideBySideFocusId) {
-          zoomSideBySideToItemById(state.sideBySideFocusId);
-        }
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => applySideBySideFocusVisuals(true));
-        });
-      }
-    }
-
-    // Side-by-side only: resize without full re-render so horizontal scroll is preserved
-    function updateCanvasZoomStyles() {
-      const containers = canvasScrollArea.querySelectorAll('.circle-container');
-      containers.forEach(container => {
-        const basePct = parseFloat(container.dataset.basePct);
-        const zoomedHeightPct = basePct * state.zoom;
-        container.style.height = `${Math.max(0.1, zoomedHeightPct)}%`;
-      });
-    }
-
-    function highlightCanvasItem(id, isHovered) {
-      const container = queryCircleByItemId(id);
-      if (!container) return;
-
-      const circle = container.querySelector('.circle-shape');
-      const tooltip = container.querySelector('.circle-tooltip');
-      const centerLine = container.querySelector('.center-line');
-
-      if (isHovered) {
-        container.style.zIndex = '50';
-        container.classList.add('is-hovered');
-        circle.style.boxShadow = `0 0 30px ${circle.style.borderColor}66, inset 0 0 20px ${circle.style.borderColor}44`;
-        tooltip.style.transform = `scale(1.1) translateX(-45%)`;
-        tooltip.style.opacity = '1';
-        if (state.viewMode === 'overlapping' && parseFloat(container.style.height) > 100) {
-          centerLine.classList.remove('hidden');
-        }
-      } else {
-        container.style.zIndex = container.dataset.stackZ || '10';
-        container.classList.remove('is-hovered');
-        if (state.viewMode === 'side-by-side' && container.classList.contains('side-by-side-target')) {
-          circle.style.boxShadow = '';
-        } else {
-          circle.style.boxShadow = 'none';
-        }
-        tooltip.style.transform = `scale(1) translateX(-50%)`;
-        if (state.viewMode === 'overlapping' && parseFloat(container.style.height) < 0.5) {
-          tooltip.style.opacity = '0';
-        }
-        centerLine.classList.add('hidden');
-      }
-    }
-
-    // --- Actions ---
-
-    window.removeItem = function(id) {
-      if (state.sideBySideFocusId === id) state.sideBySideFocusId = null;
-      state.items = state.items.filter(item => item.id !== id);
-      renderSidebarList();
-      renderCanvas(true, { sideBySideZoomToFocus: true });
-    };
-
-    function setZoom(newZoom) {
-      state.zoom = Math.max(0.01, newZoom);
-      const logVal = Math.log10(state.zoom);
-      zoomSlider.value = logVal;
-      zoomLabelText.textContent = formatZoomLabel(state.zoom);
-      zoomSlider.setAttribute('aria-valuenow', String(Math.round(logVal * 10) / 10));
-      if (state.viewMode === 'overlapping') {
-        renderCanvas(false);
-      } else {
-        updateCanvasZoomStyles();
-      }
-    }
-
     // --- Event Listeners ---
-
     presetSelect.addEventListener('change', (e) => {
       const presetKey = e.target.value;
+      if (!PRESETS[presetKey]) return;
+
       state.activePreset = presetKey;
-      state.items = [...PRESETS[presetKey].data];
+      state.items = JSON.parse(JSON.stringify(PRESETS[presetKey].data));
       state.unit = PRESETS[presetKey].unit;
       state.zoom = 1;
-      
+      state.panX = 0;
+      state.panY = 0;
+      state.sideBySideFocusId = null;
+
       unitInput.value = state.unit;
-      zoomSlider.value = 0;
-      zoomLabelText.textContent = formatZoomLabel(1);
-      zoomSlider.setAttribute('aria-valuenow', '0');
-      
+      setZoom(1);
       renderSidebarList();
-      renderCanvas(true, { sideBySideZoomToFocus: true });
+      renderCanvas(true);
     });
 
     unitInput.addEventListener('input', (e) => {
@@ -704,52 +1193,99 @@
       renderCanvas(false);
     });
 
-    stripOrderSelect.addEventListener('change', () => {
-      state.stripOrder = stripOrderSelect.value;
+    stripOrderSelect.addEventListener('change', (e) => {
+      state.stripOrder = e.target.value;
       renderSidebarList();
-      renderCanvas(true, { sideBySideZoomToFocus: true });
+      renderCanvas(true);
     });
 
-    document.getElementById('newValue').addEventListener('input', () => {
-      document.getElementById('newValue').setCustomValidity('');
-    });
-
+    // Custom Item Form Submit
     addItemForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const name = document.getElementById('newName').value.trim();
-      const value = parseFloat(document.getElementById('newValue').value);
-      const multiplier = parseFloat(document.getElementById('newMultiplier').value);
+      const nameInput = document.getElementById('newName');
+      const valInput = document.getElementById('newValue');
+      const multInput = document.getElementById('newMultiplier');
 
-      if (!name || isNaN(value) || value <= 0) {
-        document.getElementById('newValue').setCustomValidity(value <= 0 ? 'Enter a positive size' : '');
-        if (value <= 0) addItemForm.reportValidity();
+      const name = nameInput.value.trim();
+      const rawVal = parseFloat(valInput.value);
+      const mult = parseFloat(multInput.value);
+
+      if (!name) {
+        nameInput.classList.add('border-red-500', 'shake-error');
+        nameInput.focus();
+        setTimeout(() => nameInput.classList.remove('shake-error'), 400);
         return;
       }
-      document.getElementById('newValue').setCustomValidity('');
+      nameInput.classList.remove('border-red-500');
+
+      if (isNaN(rawVal) || rawVal <= 0) {
+        valInput.classList.add('border-red-500', 'shake-error');
+        valInput.focus();
+        setTimeout(() => valInput.classList.remove('shake-error'), 400);
+        return;
+      }
+      valInput.classList.remove('border-red-500');
 
       const newItem = {
         id: Date.now().toString(),
         name: name,
-        value: value * multiplier,
-        color: PALETTE[state.items.length % PALETTE.length]
+        value: rawVal * mult,
+        color: newColorInput.value || PALETTE[state.items.length % PALETTE.length],
+        visible: true
       };
 
       state.items.push(newItem);
-      if (state.viewMode === 'side-by-side') state.sideBySideFocusId = newItem.id;
+      state.sideBySideFocusId = newItem.id;
 
       // Reset inputs
-      document.getElementById('newName').value = '';
-      document.getElementById('newValue').value = '';
+      nameInput.value = '';
+      valInput.value = '';
+      randomizeColor();
+
+      // Show toast
+      addSuccessToast.classList.remove('opacity-0');
+      setTimeout(() => addSuccessToast.classList.add('opacity-0'), 1800);
 
       renderSidebarList();
-      renderCanvas(true, { sideBySideZoomToFocus: true });
+      renderCanvas(true);
+      focusItem(newItem.id);
     });
 
-    // View toggles
+    function randomizeColor() {
+      const randomColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+      newColorInput.value = randomColor;
+    }
+
+    btnRandomColor.addEventListener('click', randomizeColor);
+
+    // Clear All Confirmation
+    btnClearAll.addEventListener('click', () => {
+      if (state.items.length === 0) return;
+      if (!state.clearConfirmPending) {
+        state.clearConfirmPending = true;
+        btnClearAll.textContent = 'Confirm Clear?';
+        btnClearAll.classList.add('text-red-400', 'font-bold');
+        setTimeout(() => {
+          state.clearConfirmPending = false;
+          btnClearAll.textContent = 'Clear all';
+          btnClearAll.classList.remove('text-red-400', 'font-bold');
+        }, 4000);
+      } else {
+        state.items = [];
+        state.sideBySideFocusId = null;
+        state.clearConfirmPending = false;
+        btnClearAll.textContent = 'Clear all';
+        btnClearAll.classList.remove('text-red-400', 'font-bold');
+        renderSidebarList();
+        renderCanvas(true);
+      }
+    });
+
+    // View Mode Toggles
     btnOverlapping.addEventListener('click', () => {
       state.viewMode = 'overlapping';
-      btnOverlapping.className = 'p-1.5 rounded-full transition-all bg-slate-700 text-white';
-      btnSideBySide.className = 'p-1.5 rounded-full transition-all text-slate-400 hover:text-white';
+      btnOverlapping.className = 'px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 bg-blue-600 text-white shadow-sm';
+      btnSideBySide.className = 'px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 text-slate-400 hover:text-white';
       btnOverlapping.setAttribute('aria-pressed', 'true');
       btnSideBySide.setAttribute('aria-pressed', 'false');
       renderCanvas(true);
@@ -757,137 +1293,140 @@
 
     btnSideBySide.addEventListener('click', () => {
       state.viewMode = 'side-by-side';
-      btnSideBySide.className = 'p-1.5 rounded-full transition-all bg-slate-700 text-white';
-      btnOverlapping.className = 'p-1.5 rounded-full transition-all text-slate-400 hover:text-white';
+      btnSideBySide.className = 'px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 bg-blue-600 text-white shadow-sm';
+      btnOverlapping.className = 'px-2.5 py-1 rounded-md md:rounded-full transition-all text-xs flex items-center gap-1.5 text-slate-400 hover:text-white';
       btnSideBySide.setAttribute('aria-pressed', 'true');
       btnOverlapping.setAttribute('aria-pressed', 'false');
-      renderCanvas(true, { sideBySideZoomToFocus: true });
-    });
-
-    // Zoom controls
-    zoomSlider.addEventListener('input', (e) => {
-      setZoom(Math.pow(10, parseFloat(e.target.value)));
-    });
-
-    document.getElementById('btnZoomOut').addEventListener('click', () => {
-      setZoom(state.zoom / 1.5);
-    });
-
-    document.getElementById('btnZoomIn').addEventListener('click', () => {
-      setZoom(state.zoom * 1.5);
-    });
-
-    document.getElementById('btnResetZoom').addEventListener('click', () => {
-      setZoom(1);
-    });
-
-    btnFitZoom.addEventListener('click', () => {
-      setZoom(computeFitZoom());
-    });
-
-    btnClearAll.addEventListener('click', () => {
-      if (state.items.length === 0) return;
-      state.items = [];
-      renderSidebarList();
       renderCanvas(true);
     });
 
-    // Arrow Navigation: previous / next item (side-by-side)
-    navLeftBtn.addEventListener('click', () => navigateSideBySideStep('left'));
-    navRightBtn.addEventListener('click', () => navigateSideBySideStep('right'));
+    // Zoom Controls
+    zoomSlider.addEventListener('input', (e) => {
+      setZoom(Math.pow(10, parseFloat(e.target.value)), true);
+    });
 
-    // Keyboard: target items (side-by-side), zoom shortcuts, fit
+    btnZoomOut.addEventListener('click', () => {
+      setZoom(state.zoom / 1.4, true);
+    });
+
+    btnZoomIn.addEventListener('click', () => {
+      setZoom(state.zoom * 1.4, true);
+    });
+
+    btnFitZoom.addEventListener('click', () => {
+      setZoom(computeFitZoom(), true);
+    });
+
+    btnResetZoom.addEventListener('click', () => {
+      state.panX = 0;
+      state.panY = 0;
+      applyOverlappingPan();
+      setZoom(1, true);
+    });
+
+    btnResetHudPan.addEventListener('click', () => {
+      state.panX = 0;
+      state.panY = 0;
+      applyOverlappingPan();
+      setZoom(1, true);
+    });
+
+    // Navigation Buttons
+    navLeftBtn.addEventListener('click', () => navigateSideBySide('left'));
+    navRightBtn.addEventListener('click', () => navigateSideBySide('right'));
+
+    // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      if (state.viewMode === 'side-by-side') {
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          navigateSideBySideStep('right');
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          navigateSideBySideStep('left');
-        }
-      }
-
-      if (e.key === '+' || e.key === '=') {
+      if (e.key === 'ArrowRight') {
         e.preventDefault();
-        setZoom(state.zoom * 1.15);
+        navigateSideBySide('right');
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateSideBySide('left');
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setZoom(state.zoom * 1.25, true);
       } else if (e.key === '-' || e.key === '_') {
         e.preventDefault();
-        setZoom(state.zoom / 1.15);
+        setZoom(state.zoom / 1.25, true);
       } else if (e.key === '0') {
         e.preventDefault();
-        setZoom(1);
+        state.panX = 0;
+        state.panY = 0;
+        applyOverlappingPan();
+        setZoom(1, true);
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
-        setZoom(computeFitZoom());
+        setZoom(computeFitZoom(), true);
       }
     });
 
-    let pinchStartDist = null;
+    // Wheel Zoom & Pan
+    canvasViewport.addEventListener('wheel', (e) => {
+      if (state.viewMode === 'side-by-side') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          sideBySideContainer.scrollLeft += e.deltaY;
+          return;
+        }
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY) + 2) {
+          e.preventDefault();
+          sideBySideContainer.scrollLeft += e.deltaX;
+          return;
+        }
+      }
+      
+      e.preventDefault();
+      const dy = e.deltaY;
+      if (dy === 0) return;
+      const factor = dy > 0 ? 1 / 1.12 : 1.12;
+      setZoom(state.zoom * factor);
+    }, { passive: false });
+
+    // Touch gestures (Pinch to zoom & swipe)
+    let touchStartDist = null;
     canvasViewport.addEventListener('touchstart', (e) => {
       if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
-        pinchStartDist = Math.hypot(dx, dy);
+        touchStartDist = Math.hypot(dx, dy);
       }
     }, { passive: true });
 
     canvasViewport.addEventListener('touchmove', (e) => {
-      if (e.touches.length !== 2 || pinchStartDist == null || pinchStartDist < 1) return;
-      e.preventDefault();
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.hypot(dx, dy);
-      const factor = dist / pinchStartDist;
-      setZoom(state.zoom * factor);
-      pinchStartDist = dist;
+      if (e.touches.length === 2 && touchStartDist) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        if (touchStartDist > 0) {
+          const factor = dist / touchStartDist;
+          setZoom(state.zoom * factor);
+          touchStartDist = dist;
+        }
+      }
     }, { passive: false });
 
     canvasViewport.addEventListener('touchend', (e) => {
-      if (!e.touches || e.touches.length < 2) pinchStartDist = null;
-    });
-    canvasViewport.addEventListener('touchcancel', () => {
-      pinchStartDist = null;
+      if (!e.touches || e.touches.length < 2) touchStartDist = null;
     });
 
-    // Mouse / trackpad wheel on canvas: zoom; side-by-side can pan horizontally (shift+wheel or dominant deltaX)
-    canvasViewport.addEventListener(
-      'wheel',
-      (e) => {
-        if (state.viewMode === 'side-by-side') {
-          if (e.shiftKey) {
-            e.preventDefault();
-            canvasScrollArea.scrollLeft += e.deltaY;
-            return;
-          }
-          const absX = Math.abs(e.deltaX);
-          const absY = Math.abs(e.deltaY);
-          if (absX > absY + 2) {
-            e.preventDefault();
-            canvasScrollArea.scrollLeft += e.deltaX;
-            return;
-          }
-        }
-        e.preventDefault();
-        const dy = e.deltaY;
-        if (dy === 0) return;
-        const factor = dy > 0 ? 1 / 1.08 : 1.08;
-        setZoom(state.zoom * factor);
-      },
-      { passive: false }
-    );
+    // Responsive resize listener for scale ruler
+    window.addEventListener('resize', () => {
+      updateScaleRuler();
+    });
 
-    // --- Init ---
-    lucide.createIcons();
+    // --- Bootstrapping ---
     initPresets();
-    zoomLabelText.textContent = formatZoomLabel(state.zoom);
-    zoomSlider.setAttribute('aria-valuenow', String(Math.round(parseFloat(zoomSlider.value) * 10) / 10));
+    randomizeColor();
+    initDragToPan();
     renderSidebarList();
-    renderCanvas(true, { sideBySideZoomToFocus: true });
-
+    renderCanvas(true);
+    setZoom(1);
+    lucide.createIcons();
   </script>
 </body>
 </html>
